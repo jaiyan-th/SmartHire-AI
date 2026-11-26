@@ -58,7 +58,6 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
   const [assignedSessions, setAssignedSessions] = useState<InterviewSession[]>([]);
 
   const [profName, setProfName] = useState(user?.full_name || '');
-  const [profRole, setProfRole] = useState(user?.target_role || '');
   const [profHeadline, setProfHeadline] = useState(user?.headline || '');
   const [profRecConsent, setProfRecConsent] = useState(Boolean(user?.recording_consent));
   const [profCamConsent, setProfCamConsent] = useState(Boolean(user?.webcam_consent));
@@ -66,7 +65,6 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
   useEffect(() => {
     if (user) {
       setProfName(user.full_name || '');
-      setProfRole(user.target_role || '');
       setProfHeadline(user.headline || '');
       setProfRecConsent(Boolean(user.recording_consent));
       setProfCamConsent(Boolean(user.webcam_consent));
@@ -128,7 +126,6 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
     try {
       const updated = await api.updateProfile({
         full_name: profName.trim(),
-        target_role: profRole.trim(),
         headline: profHeadline.trim(),
         recording_consent: profRecConsent,
         webcam_consent: profCamConsent,
@@ -518,6 +515,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
           <div>
             <label className="block text-xs font-medium text-ink-secondary mb-1.5">Full name</label>
             <input
+              id="profile-fullname-input"
               type="text"
               required
               value={profName}
@@ -526,22 +524,18 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-ink-secondary mb-1.5">Target role</label>
+            <label className="block text-xs font-medium text-ink-secondary mb-1.5">Headline (Optional)</label>
             <input
-              type="text"
-              value={profRole}
-              onChange={(e) => setProfRole(e.target.value)}
-              className="w-full h-11 rounded-xl border border-border bg-canvas px-3.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-ink-secondary mb-1.5">Headline</label>
-            <input
+              id="profile-headline-input"
               type="text"
               value={profHeadline}
               onChange={(e) => setProfHeadline(e.target.value)}
-              className="w-full h-11 rounded-xl border border-border bg-canvas px-3.5 text-sm"
+              placeholder="Optional (e.g., B.Tech Student, Backend Developer)"
+              className="w-full h-11 rounded-xl border border-border bg-canvas px-3.5 text-sm placeholder:text-ink-muted"
             />
+            <p className="text-[11px] text-ink-muted mt-1.5">
+              Target roles are selected directly per Mock Interview session or Resume ATS analysis.
+            </p>
           </div>
           <div className="rounded-xl border border-border bg-canvas p-4 space-y-2.5 text-sm">
             <label className="flex items-center gap-2.5 cursor-pointer">

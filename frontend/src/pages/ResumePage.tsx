@@ -19,7 +19,7 @@ export default function ResumePage() {
   const [dragOver, setDragOver] = useState(false);
 
   const [rawText, setRawText] = useState('');
-  const [targetRole, setTargetRole] = useState('Full Stack Software Engineer (Python / React)');
+  const [targetRole, setTargetRole] = useState('');
   const [jobDescription, setJobDescription] = useState('');
 
   const [analyzing, setAnalyzing] = useState(false);
@@ -73,6 +73,10 @@ export default function ResumePage() {
     e.preventDefault();
     if (!selectedFile && !rawText.trim()) {
       toast('Upload a .pdf/.docx/.txt resume or paste resume text.', 'error');
+      return;
+    }
+    if (!targetRole.trim()) {
+      toast('Enter the target role you want this resume scored against.', 'error');
       return;
     }
 
@@ -192,12 +196,17 @@ export default function ResumePage() {
 
                       <div className="grid grid-cols-1 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-ink-secondary mb-1.5">Target Job Role</label>
+                          <label htmlFor="resume-target-role-input" className="block text-sm font-medium text-ink-secondary mb-1.5">
+                            Target Job Role
+                          </label>
                           <input
+                            id="resume-target-role-input"
                             type="text"
+                            required
                             value={targetRole}
                             onChange={(e) => setTargetRole(e.target.value)}
-                            className="w-full h-11 rounded-xl border border-border bg-canvas px-4 text-sm"
+                            placeholder="e.g. AI Engineer, Backend Developer, Product Manager"
+                            className="w-full h-11 rounded-xl border border-border bg-canvas px-4 text-sm placeholder:text-ink-muted"
                           />
                         </div>
                         <div>

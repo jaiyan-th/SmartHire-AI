@@ -69,6 +69,7 @@ export default function DashboardPage() {
   }, []);
 
   const latestResume = resumes[0] || null;
+  const activeTargetRole = history[0]?.domain || latestResume?.target_role || '';
   const completedCount = insights?.total_sessions || 0;
   const readinessScore = insights?.has_data
     ? insights.overall_score
@@ -114,7 +115,11 @@ export default function DashboardPage() {
   return (
     <AppShell
       title="Candidate Workspace"
-      subtitle={`Targeting ${user?.target_role || 'Software Engineering'}`}
+      subtitle={
+        activeTargetRole
+          ? `Active target: ${activeTargetRole}`
+          : 'Select your target role when launching a Mock Interview or Resume ATS check'
+      }
     >
       <div className="space-y-8">
         {/* Welcome Hero Cockpit */}

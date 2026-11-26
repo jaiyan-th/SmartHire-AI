@@ -109,11 +109,16 @@ def run_e2e():
         scroll_click(driver, reg_tab)
         type_text(driver, wait.until(EC.visibility_of_element_located((By.ID, "reg-name"))), "E2E Candidate")
         type_text(driver, driver.find_element(By.ID, "reg-email"), cand_email)
-        type_text(driver, driver.find_element(By.ID, "reg-role"), "Full Stack Software Engineer")
         type_text(driver, driver.find_element(By.ID, "reg-password"), test_pw)
         scroll_click(driver, wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='register-btn']"))))
         wait.until(EC.url_contains("/dashboard"))
         wait.until(lambda d: "Candidate Workspace" in d.find_element(By.TAG_NAME, "body").text)
+        # Verify Profile & Privacy Controls keeps headline blank and omits Target role
+        scroll_click(driver, wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//span[contains(., 'E2E Candidate')]]"))))
+        headline_el = wait.until(EC.visibility_of_element_located((By.ID, "profile-headline-input")))
+        assert headline_el.get_attribute("value") == "", f"Expected empty default headline, got {headline_el.get_attribute('value')!r}"
+        assert len(driver.find_elements(By.XPATH, "//*[@role='dialog']//label[contains(., 'Target role')]")) == 0
+        scroll_click(driver, wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[role='dialog'] button[aria-label='Close dialog']"))))
         assert_no_console_errors(driver, "DashboardPage")
 
         print("2b. Verifying Growth Journey shows honest empty state before resume/interview...")
@@ -144,6 +149,7 @@ def run_e2e():
         raw_box = wait.until(EC.visibility_of_element_located((By.ID, "resume-raw-text-input")))
         time.sleep(0.3)
         type_text(driver, raw_box, "Skills: Python, Django, React, PostgreSQL, Git, REST API. Education: B.Tech CS. Experience: Software Intern")
+        type_text(driver, driver.find_element(By.ID, "resume-target-role-input"), "Full Stack Software Engineer")
         analyze_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='analyze-resume-btn']")))
         scroll_click(driver, analyze_btn)
         wait.until(lambda d: "pasted_resume.txt" in d.find_element(By.ID, "ats-result-filename").text)

@@ -23,7 +23,7 @@ class Resume(models.Model):
     )
     error_message = models.TextField(blank=True, default='')
     raw_text = models.TextField(blank=True, default='')
-    target_role = models.CharField(max_length=150, blank=True, default='Full Stack Software Engineer')
+    target_role = models.CharField(max_length=150, blank=True, default='')
     ats_score = models.IntegerField(default=0)
     executive_summary = models.TextField(blank=True, default='')
     skills_extracted = models.JSONField(default=dict, blank=True)

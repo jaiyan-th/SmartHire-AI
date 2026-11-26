@@ -168,12 +168,18 @@ class SkillGapView(views.APIView):
     def get(self, request):
         latest_resume = Resume.objects.filter(user=request.user).order_by('-created_at').first()
         latest_eval = Evaluation.objects.filter(session__candidate=request.user).order_by('-created_at').first()
+        latest_session = InterviewSession.objects.filter(candidate=request.user).order_by('-created_at').first()
         saved_milestones = {
             m.milestone_key: m.completed
             for m in RoadmapMilestone.objects.filter(user=request.user)
         }
 
-        target_role = (latest_resume.target_role if latest_resume else request.user.target_role) or 'Full Stack Software Engineer'
+        target_role = (
+            (latest_resume.target_role if latest_resume else None)
+            or (latest_eval.session.domain if latest_eval else None)
+            or (latest_session.domain if latest_session else None)
+            or ''
+        )
 
         if not latest_resume and not latest_eval:
             return response.Response({

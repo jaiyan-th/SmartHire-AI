@@ -530,7 +530,7 @@ export function MentorChatbot() {
             {summary && (
               <div className="px-5 py-2 border-b border-border bg-canvas flex flex-wrap items-center gap-2 text-[11px] font-mono text-ink-secondary">
                 <span className="px-2 py-0.5 rounded bg-surface border border-border text-ink truncate max-w-[180px]">
-                  {summary.target_role}
+                  {summary.target_role || 'Role chosen per interview'}
                 </span>
                 <span className="px-2 py-0.5 rounded bg-surface border border-border">
                   {summary.has_resume ? `ATS ${summary.ats_score}%` : 'No resume'}

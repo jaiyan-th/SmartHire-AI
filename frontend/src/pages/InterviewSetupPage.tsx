@@ -31,7 +31,7 @@ export default function InterviewSetupPage() {
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
 
-  const [domain, setDomain] = useState('Software Engineering');
+  const [domain, setDomain] = useState('');
   const [isCustomDomain, setIsCustomDomain] = useState(false);
   const [customDomainInput, setCustomDomainInput] = useState('');
   const [category, setCategory] = useState(searchParams.get('category') || 'Technical');
@@ -136,7 +136,13 @@ export default function InterviewSetupPage() {
     };
   }, [step, cameraConsent]);
 
+  const resolvedDomain = isCustomDomain ? customDomainInput.trim() : domain.trim();
+
   const goStep = (next: number) => {
+    if (next > 0 && !resolvedDomain) {
+      toast('Please select a discipline or enter a targeted role for your mock interview.', 'error');
+      return;
+    }
     setDirection(next > step ? 1 : -1);
     setStep(next);
   };
@@ -539,13 +545,7 @@ export default function InterviewSetupPage() {
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => {
-                  if (step === 0 && isCustomDomain && !customDomainInput.trim()) {
-                    toast('Please enter your custom targeted role or choose a preset discipline.', 'error');
-                    return;
-                  }
-                  goStep(step + 1);
-                }}
+                onClick={() => goStep(step + 1)}
               >
                 Continue <ArrowRight className="h-4 w-4" />
               </Button>

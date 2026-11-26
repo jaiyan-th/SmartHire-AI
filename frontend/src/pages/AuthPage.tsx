@@ -27,7 +27,6 @@ export default function AuthPage() {
 
   const [fullName, setFullName] = useState('');
   const [regEmail, setRegEmail] = useState('');
-  const [targetRole, setTargetRole] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
   const [adminName, setAdminName] = useState('');
@@ -59,7 +58,7 @@ export default function AuthPage() {
           github: Boolean(res.github_sso?.enabled),
         });
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -89,7 +88,6 @@ export default function AuthPage() {
       const created = await register({
         full_name: fullName.trim(),
         email: regEmail.trim(),
-        target_role: targetRole.trim() || 'Software Engineer',
         password: regPassword,
       });
       toast(`Account created for ${created.full_name}`, 'success');
@@ -248,9 +246,8 @@ export default function AuthPage() {
 
           {/* Segmented Tabs */}
           <div
-            className={`grid p-1.5 rounded-xl bg-surface-2 border border-border ${
-              tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
-            }`}
+            className={`grid p-1.5 rounded-xl bg-surface-2 border border-border ${tabs.length === 3 ? 'grid-cols-3' : 'grid-cols-2'
+              }`}
           >
             {tabs.map((tab) => (
               <button
@@ -260,9 +257,8 @@ export default function AuthPage() {
                   setMode(tab.id);
                   setInlineError('');
                 }}
-                className={`relative py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                  mode === tab.id ? 'text-ink' : 'text-ink-secondary hover:text-ink'
-                }`}
+                className={`relative py-2.5 text-sm font-medium rounded-lg transition-colors ${mode === tab.id ? 'text-ink' : 'text-ink-secondary hover:text-ink'
+                  }`}
               >
                 {mode === tab.id && (
                   <motion.span
@@ -371,19 +367,6 @@ export default function AuthPage() {
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
                   placeholder="you@company.com"
-                  className="w-full h-12 rounded-xl border border-border bg-surface px-4 text-sm text-ink focus:border-ink focus:outline-none"
-                />
-              </div>
-              <div>
-                <label htmlFor="reg-role" className="block text-sm font-medium text-ink-secondary mb-1.5">
-                  Target job role
-                </label>
-                <input
-                  id="reg-role"
-                  type="text"
-                  value={targetRole}
-                  onChange={(e) => setTargetRole(e.target.value)}
-                  placeholder="e.g. Full Stack Software Engineer"
                   className="w-full h-12 rounded-xl border border-border bg-surface px-4 text-sm text-ink focus:border-ink focus:outline-none"
                 />
               </div>

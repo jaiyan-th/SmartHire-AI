@@ -27,6 +27,7 @@ def _build_user_mentor_context(user) -> tuple:
 
     latest_resume = Resume.objects.filter(user=user).order_by('-created_at').first()
     latest_eval = Evaluation.objects.filter(session__candidate=user).select_related('session').order_by('-created_at').first()
+    latest_session = InterviewSession.objects.filter(candidate=user).order_by('-created_at').first()
     total_sessions = InterviewSession.objects.filter(candidate=user, status='completed').count()
     completed_milestones = RoadmapMilestone.objects.filter(user=user, completed=True).count()
 
@@ -35,9 +36,11 @@ def _build_user_mentor_context(user) -> tuple:
         extracted_skills = [s for sub in latest_resume.skills_extracted.values() for s in sub]
 
     target_role = (
-        (latest_resume.target_role if latest_resume else None)
+        (latest_eval.session.domain if latest_eval else None)
+        or (latest_session.domain if latest_session else None)
+        or (latest_resume.target_role if latest_resume else None)
         or getattr(user, 'target_role', '')
-        or 'Software Engineering'
+        or ''
     )
 
     context = {
@@ -79,8 +82,10 @@ def _build_user_mentor_context(user) -> tuple:
         suggestions.append(f'How should I prepare for {latest_resume.missing_skills[0]}?')
     if latest_eval:
         suggestions.append(f'Explain my {latest_eval.overall_score}/100 interview score')
-    else:
+    elif target_role:
         suggestions.append(f'Give me a prep checklist for {target_role}')
+    else:
+        suggestions.append('How should I prepare for my first mock interview?')
     suggestions.append('How do I structure STAR behavioral answers?')
 
     summary = {

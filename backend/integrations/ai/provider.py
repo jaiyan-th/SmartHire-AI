@@ -512,7 +512,7 @@ class AIProviderService:
     def _build_personalized_fallback_reply(self, ctx: dict, question: str) -> str:
         q = question.lower()
         name = (ctx.get('first_name') or 'there').strip()
-        target_role = ctx.get('target_role') or 'Software Engineering'
+        target_role = (ctx.get('target_role') or '').strip() or 'your chosen target role'
         has_resume = bool(ctx.get('has_resume'))
         ats_score = ctx.get('ats_score')
         extracted_skills = ctx.get('extracted_skills') or []

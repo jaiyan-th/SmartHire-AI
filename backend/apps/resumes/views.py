@@ -13,7 +13,7 @@ class AnalyzeResumeView(views.APIView):
 
     def post(self, request):
         uploaded_file = request.FILES.get('resume')
-        target_role = str(request.data.get('target_role') or 'Full Stack Software Engineer').strip()[:150]
+        target_role = str(request.data.get('target_role') or '').strip()[:150] or 'General Role'
         job_description = str(request.data.get('job_description') or '').strip()[:15000]
         raw_text_input = str(request.data.get('raw_text') or '').strip()
 

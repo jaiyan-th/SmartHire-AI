@@ -264,6 +264,9 @@ class ProductionHardeningTests(TestCase):
         self.assertEqual(retry.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_personalized_mentor_chatbot_context_persistence_and_clear(self):
+        fresh = User.objects.create_user(username='fresh_u', email='fresh@demo.com', password='Password123!')
+        self.assertEqual(fresh.headline, '')
+        self.assertEqual(fresh.target_role, '')
         unauth = APIClient().get('/api/core/assistant/chat')
         self.assertEqual(unauth.status_code, status.HTTP_401_UNAUTHORIZED)
 

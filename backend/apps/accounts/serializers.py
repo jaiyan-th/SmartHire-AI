@@ -54,9 +54,9 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             full_name=validated_data.get('full_name', '').strip() or base_name.title(),
             role=UserRole.CANDIDATE,
-            organization=validated_data.get('organization', '').strip(),
-            headline=validated_data.get('headline', 'Software Engineering Candidate').strip(),
-            target_role=validated_data.get('target_role', 'Full Stack Software Engineer').strip(),
+            organization=(validated_data.get('organization') or '').strip(),
+            headline=(validated_data.get('headline') or '').strip(),
+            target_role=(validated_data.get('target_role') or '').strip(),
         )
         return user
 
