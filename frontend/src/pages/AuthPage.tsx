@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Moon, ShieldCheck, Sun } from 'lucide-react';
@@ -36,6 +36,7 @@ export default function AuthPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [inlineError, setInlineError] = useState('');
+  const oauthHandledRef = useRef<string | null>(null);
   const [needsInitialSetup, setNeedsInitialSetup] = useState(false);
   const [providers, setProviders] = useState<{ google: boolean; github: boolean }>({
     google: false,
@@ -67,6 +68,10 @@ export default function AuthPage() {
     const state = searchParams.get('state');
     if (!oauthProvider || !code || !state) return;
     if (oauthProvider !== 'google' && oauthProvider !== 'github') return;
+    const dedupKey = `${oauthProvider}:${code}:${state}`;
+    if (oauthHandledRef.current === dedupKey) return;
+    oauthHandledRef.current = dedupKey;
+
     const redirectUri = `${window.location.origin}/auth/oauth/${oauthProvider}`;
     setSubmitting(true);
     completeOAuthLogin(oauthProvider, code, state, redirectUri)

@@ -90,16 +90,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return res.user;
   };
 
-  const completeOAuthLogin = async (
-    provider: 'google' | 'github',
-    code: string,
-    state: string,
-    redirectUri: string,
-  ) => {
-    const res = await api.completeOAuthCallback(provider, code, state, redirectUri);
-    setUser(res.user);
-    return res.user;
-  };
+  const completeOAuthLogin = useCallback(
+    async (provider: 'google' | 'github', code: string, state: string, redirectUri: string) => {
+      const res = await api.completeOAuthCallback(provider, code, state, redirectUri);
+      setUser(res.user);
+      return res.user;
+    },
+    [],
+  );
 
   const logout = async () => {
     await api.logout();

@@ -453,7 +453,11 @@ class OAuthCallbackView(views.APIView):
                     timeout=15,
                 )
                 tok_res.raise_for_status()
-                access_tok = tok_res.json().get('access_token')
+                tok_json = tok_res.json()
+                access_tok = tok_json.get('access_token')
+                if not access_tok:
+                    err_desc = tok_json.get('error_description') or tok_json.get('error') or 'Missing access token from GitHub.'
+                    return response.Response({'error': err_desc}, status=status.HTTP_400_BAD_REQUEST)
                 headers = {'Authorization': f'Bearer {access_tok}', 'Accept': 'application/json'}
                 user_res = requests.get('https://api.github.com/user', headers=headers, timeout=15)
                 user_res.raise_for_status()
