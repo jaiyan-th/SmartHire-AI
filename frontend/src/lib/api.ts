@@ -605,8 +605,9 @@ class SmartHireAPIClient {
   }
 
   // Personalized Mentor Chatbot
-  getMentorChatHistory() {
-    return this.request<MentorChatHistoryResponse>('/api/core/assistant/chat');
+  getMentorChatHistory(query?: string) {
+    const qs = query?.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
+    return this.request<MentorChatHistoryResponse>(`/api/core/assistant/chat${qs}`);
   }
 
   sendMentorChat(message: string, inputSource: 'text' | 'voice' = 'text') {
@@ -621,12 +622,13 @@ class SmartHireAPIClient {
     });
   }
 
-  clearMentorChat() {
+  clearMentorChat(questionId?: string) {
+    const qs = questionId ? `?question_id=${encodeURIComponent(questionId)}` : '';
     return this.request<{
       message: string;
       context_summary: MentorContextSummary;
       suggested_prompts: string[];
-    }>('/api/core/assistant/chat', {
+    }>(`/api/core/assistant/chat${qs}`, {
       method: 'DELETE',
     });
   }

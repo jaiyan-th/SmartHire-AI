@@ -295,6 +295,23 @@ class ProductionHardeningTests(TestCase):
         hist = self.client_cand.get('/api/core/assistant/chat')
         self.assertEqual(hist.status_code, status.HTTP_200_OK)
         self.assertEqual(len(hist.data['messages']), 4)
+        self.assertEqual(hist.data['total_questions'], 2)
+        self.assertEqual(len(hist.data['qa_history']), 2)
+        self.assertEqual(hist.data['qa_history'][0]['question'], 'Check my resume score now')
+
+        # Server-side keyword search in stored doubts history (matches question or answer)
+        filtered = self.client_cand.get('/api/core/assistant/chat?q=check my resume score')
+        self.assertEqual(filtered.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filtered.data['qa_history']), 1)
+        filtered_both = self.client_cand.get('/api/core/assistant/chat?q=ats')
+        self.assertEqual(len(filtered_both.data['qa_history']), 2)
+
+        # Single-doubt removal preserves older saved doubt
+        first_qid = chat2.data['user_message']['id']
+        single_del = self.client_cand.delete(f'/api/core/assistant/chat?question_id={first_qid}')
+        self.assertEqual(single_del.status_code, status.HTTP_200_OK)
+        hist_mid = self.client_cand.get('/api/core/assistant/chat')
+        self.assertEqual(hist_mid.data['total_questions'], 1)
 
         cleared = self.client_cand.delete('/api/core/assistant/chat')
         self.assertEqual(cleared.status_code, status.HTTP_200_OK)

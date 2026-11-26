@@ -121,13 +121,22 @@ def run_e2e():
         wait.until(lambda d: "No resume or interview assessment data yet" in d.find_element(By.TAG_NAME, "body").text)
         assert_no_console_errors(driver, "GrowthPageEmpty")
 
-        print("2c. Testing Personalized Mentor Chatbot (Voice button + Text doubt -> Text response)...")
+        print("2c. Testing Personalized Mentor Chatbot (Voice + Text -> Saved History & Recall)...")
         scroll_click(driver, wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='chatbot-trigger']"))))
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-drawer']")))
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-voice-btn']")))
         type_text(driver, wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-input']"))), "How is my resume ATS score?")
         scroll_click(driver, wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='chatbot-send-btn']"))))
         wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "[data-testid='chatbot-bot-msg']")) >= 1 and "resume" in d.find_elements(By.CSS_SELECTOR, "[data-testid='chatbot-bot-msg']")[-1].text.lower())
+
+        # Verify similar-doubt recall banner triggers without re-asking, and Past Doubts search tab displays saved Q&A
+        type_text(driver, wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-input']"))), "resume ATS")
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-recall-banner']")))
+        scroll_click(driver, wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='chatbot-tab-history']"))))
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-history-panel']")))
+        wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "[data-testid='chatbot-history-item']")) >= 1)
+        type_text(driver, wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-history-search']"))), "resume")
+        wait.until(lambda d: "How is my resume ATS score?" in d.find_element(By.CSS_SELECTOR, "[data-testid='chatbot-history-panel']").text)
         assert_no_console_errors(driver, "MentorChatbot")
 
         print("3. Testing Resume ATS Analysis...")

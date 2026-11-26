@@ -151,12 +151,57 @@ class MentorChatView(views.APIView):
             'created_at': msg.created_at.isoformat(),
         }
 
+    @staticmethod
+    def _pair_qa_history(ordered_messages: list) -> list:
+        pairs = []
+        i = 0
+        while i < len(ordered_messages):
+            msg = ordered_messages[i]
+            if msg.role == 'user':
+                answer_msg = (
+                    ordered_messages[i + 1]
+                    if (i + 1 < len(ordered_messages) and ordered_messages[i + 1].role == 'assistant')
+                    else None
+                )
+                pairs.append({
+                    'question_id': str(msg.id),
+                    'answer_id': str(answer_msg.id) if answer_msg else None,
+                    'question': msg.content,
+                    'answer': answer_msg.content if answer_msg else '',
+                    'input_source': msg.input_source,
+                    'provider': answer_msg.provider if answer_msg else msg.provider,
+                    'created_at': msg.created_at.isoformat(),
+                })
+                i += 2 if answer_msg else 1
+            else:
+                i += 1
+        pairs.reverse()  # Newest doubts first for quick referral
+        return pairs
+
     def get(self, request):
         ctx, suggestions, summary = _build_user_mentor_context(request.user)
-        messages_qs = MentorChatMessage.objects.filter(user=request.user).order_by('created_at')
-        history = [self._serialize(m) for m in messages_qs[:60]]
+        search_q = str(request.query_params.get('q') or '').strip().lower()
+
+        all_recent = list(
+            MentorChatMessage.objects.filter(user=request.user).order_by('-created_at')[:200]
+        )
+        all_recent.reverse()
+
+        qa_history = self._pair_qa_history(all_recent)
+        if search_q:
+            # Search across full persisted database history if query is provided
+            full_msgs = list(MentorChatMessage.objects.filter(user=request.user).order_by('created_at'))
+            full_pairs = self._pair_qa_history(full_msgs)
+            qa_history = [
+                p for p in full_pairs
+                if search_q in p['question'].lower() or search_q in p['answer'].lower()
+            ]
+
+        history = [self._serialize(m) for m in all_recent]
         return response.Response({
             'messages': history,
+            'qa_history': qa_history,
+            'total_questions': MentorChatMessage.objects.filter(user=request.user, role='user').count(),
             'context_summary': summary,
             'suggested_prompts': suggestions,
         })
@@ -207,6 +252,27 @@ class MentorChatView(views.APIView):
         }, status=status.HTTP_200_OK)
 
     def delete(self, request):
+        question_id = str(request.query_params.get('question_id') or '').strip()
+        if question_id:
+            target_q = MentorChatMessage.objects.filter(user=request.user, id=question_id, role='user').first()
+            if not target_q:
+                return response.Response({'error': 'Saved doubt not found.'}, status=status.HTTP_404_NOT_FOUND)
+            # Delete matching assistant reply immediately following this user question
+            next_msg = (
+                MentorChatMessage.objects.filter(user=request.user, created_at__gt=target_q.created_at)
+                .order_by('created_at')
+                .first()
+            )
+            if next_msg and next_msg.role == 'assistant':
+                next_msg.delete()
+            target_q.delete()
+            ctx, suggestions, summary = _build_user_mentor_context(request.user)
+            return response.Response({
+                'message': 'Saved doubt removed.',
+                'context_summary': summary,
+                'suggested_prompts': suggestions,
+            }, status=status.HTTP_200_OK)
+
         MentorChatMessage.objects.filter(user=request.user).delete()
         ctx, suggestions, summary = _build_user_mentor_context(request.user)
         return response.Response({

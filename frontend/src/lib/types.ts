@@ -307,8 +307,20 @@ export interface MentorContextSummary {
   latest_score: number | null;
 }
 
+export interface MentorQAPair {
+  question_id: string;
+  answer_id: string | null;
+  question: string;
+  answer: string;
+  input_source: 'text' | 'voice';
+  provider: string;
+  created_at: string;
+}
+
 export interface MentorChatHistoryResponse {
   messages: MentorMessage[];
+  qa_history: MentorQAPair[];
+  total_questions: number;
   context_summary: MentorContextSummary;
   suggested_prompts: string[];
 }
