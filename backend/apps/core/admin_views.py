@@ -64,12 +64,14 @@ class AdminOverviewView(views.APIView):
 
         config = PlatformConfig.get_solo()
         uptime_secs = int(time.monotonic() - APP_START_MONOTONIC)
+        from integrations.ai.provider import AIProviderService
 
         return response.Response({
             'db_status': 'Healthy' if db_ok else 'Degraded',
             'db_engine': connection.vendor,
             'db_ping_ms': db_ping_ms,
             'llm_backend': config.llm_backend,
+            'integrations': AIProviderService.get_integration_status(),
             'llm_latency_ms': avg_latency,
             'registered_users': total_users,
             'candidate_count': candidate_count,
@@ -250,7 +252,12 @@ class AdminSettingsView(views.APIView):
             'max_question_count': config.max_question_count,
             'daily_token_budget': config.daily_token_budget,
             'maintenance_mode': config.maintenance_mode,
-            'available_backends': ['Groq Llama-3.1-8B-Instant', 'OpenAI GPT-4o-mini', 'Local Ollama Llama-3'],
+            'available_backends': [
+                'Google Gemini 2.0 Flash',
+                'Groq Llama-3.1-8B-Instant',
+                'OpenAI GPT-4o-mini',
+                'Local Ollama Llama-3',
+            ],
         })
 
     def post(self, request):

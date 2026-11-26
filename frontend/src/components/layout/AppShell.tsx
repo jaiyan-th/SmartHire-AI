@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
+import { MentorChatbot } from '@/components/MentorChatbot';
 import { Button, Modal } from '@/components/ui/Primitives';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -574,6 +575,8 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
           </Button>
         </div>
       </Modal>
+
+      <MentorChatbot />
     </div>
   );
 }

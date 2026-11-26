@@ -4,12 +4,27 @@ from django.conf import settings
 from django.contrib.auth.models import update_last_login
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework import views, status, response, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.core.audit import log_audit_event
 from .models import User, UserRole, PasswordResetToken, EmailVerificationToken
 from .serializers import UserSerializer, ProfileUpdateSerializer, RegisterSerializer, ChangePasswordSerializer
+
+
+def _send_transactional_email(to_email: str, subject: str, body: str):
+    """Dispatches transactional verification/reset emails via configured SMTP or console backend."""
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@smarthire.local'),
+            recipient_list=[to_email],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
 
 
 def revoke_all_user_tokens(user):
@@ -33,6 +48,11 @@ class RegisterView(views.APIView):
             verify_token = EmailVerificationToken.objects.create(
                 user=user,
                 expires_at=timezone.now() + timedelta(hours=24),
+            )
+            _send_transactional_email(
+                user.email,
+                'Verify your SmartHire AI account',
+                f"Welcome to SmartHire AI.\n\nYour email verification token is:\n{verify_token.token}\n\nThis token expires in 24 hours.",
             )
             refresh = RefreshToken.for_user(user)
             update_last_login(None, user)
@@ -205,6 +225,11 @@ class ForgotPasswordView(views.APIView):
                 expires_at=timezone.now() + timedelta(minutes=30),
             )
             reset_token_str = str(token_obj.token)
+            _send_transactional_email(
+                email,
+                'SmartHire AI Password Reset',
+                f"A password reset was requested for your SmartHire AI account.\n\nReset token (valid 30 minutes):\n{reset_token_str}",
+            )
             log_audit_event(
                 'PASSWORD_RESET_REQUESTED',
                 f"Password reset token issued for {email}",
@@ -390,11 +415,13 @@ class ExportUserDataView(views.APIView):
         from apps.interviews.serializers import InterviewSessionSerializer
         from apps.evaluations.models import Evaluation
         from apps.evaluations.serializers import EvaluationSerializer
+        from apps.core.models import MentorChatMessage
 
         resumes = Resume.objects.filter(user=request.user).order_by('-created_at')
         sessions = InterviewSession.objects.filter(candidate=request.user).prefetch_related('questions', 'answers').order_by('-created_at')
         evaluations = Evaluation.objects.filter(session__candidate=request.user).order_by('-created_at')
         milestones = RoadmapMilestone.objects.filter(user=request.user).values('milestone_key', 'completed', 'updated_at')
+        chat_msgs = MentorChatMessage.objects.filter(user=request.user).values('role', 'content', 'input_source', 'created_at')
 
         log_audit_event(
             'USER_DATA_EXPORTED',
@@ -410,4 +437,5 @@ class ExportUserDataView(views.APIView):
             'interviews': InterviewSessionSerializer(sessions, many=True).data,
             'evaluations': EvaluationSerializer(evaluations, many=True).data,
             'roadmap_milestones': list(milestones),
+            'mentor_chat_messages': list(chat_msgs),
         })

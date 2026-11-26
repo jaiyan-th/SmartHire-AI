@@ -121,6 +121,15 @@ def run_e2e():
         wait.until(lambda d: "No resume or interview assessment data yet" in d.find_element(By.TAG_NAME, "body").text)
         assert_no_console_errors(driver, "GrowthPageEmpty")
 
+        print("2c. Testing Personalized Mentor Chatbot (Voice button + Text doubt -> Text response)...")
+        scroll_click(driver, wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='chatbot-trigger']"))))
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-drawer']")))
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-voice-btn']")))
+        type_text(driver, wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-input']"))), "How is my resume ATS score?")
+        scroll_click(driver, wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='chatbot-send-btn']"))))
+        wait.until(lambda d: "haven't uploaded a resume" in d.find_element(By.CSS_SELECTOR, "[data-testid='chatbot-drawer']").text.lower())
+        assert_no_console_errors(driver, "MentorChatbot")
+
         print("3. Testing Resume ATS Analysis...")
         driver.get(f"{FRONTEND_URL}/resume")
         raw_box = wait.until(EC.visibility_of_element_located((By.ID, "resume-raw-text-input")))

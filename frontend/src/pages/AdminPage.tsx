@@ -202,6 +202,35 @@ export default function AdminPage() {
           </section>
         )}
 
+        {overview?.integrations && (
+          <section className="rounded-2xl p-5 card-elevated flex flex-wrap items-center justify-between gap-3">
+            <span className="font-mono text-xs text-ink-muted">EXTERNAL API &amp; INTEGRATION READINESS</span>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+              {[
+                { label: 'Gemini', active: overview.integrations.gemini_configured },
+                { label: 'Groq', active: overview.integrations.groq_configured },
+                { label: 'OpenAI', active: overview.integrations.openai_configured },
+                { label: 'Ollama', active: overview.integrations.ollama_configured },
+                { label: 'SMTP Mail', active: overview.integrations.smtp_configured },
+                { label: 'Google SSO', active: overview.integrations.google_oauth_configured },
+                { label: 'GitHub SSO', active: overview.integrations.github_sso_configured },
+              ].map((item) => (
+                <span
+                  key={item.label}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 ${
+                    item.active
+                      ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300'
+                      : 'border-border bg-canvas text-ink-muted'
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${item.active ? 'bg-emerald-500' : 'bg-ink-muted/40'}`} />
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* User RBAC Table + AI Settings */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-7 rounded-2xl card-elevated overflow-hidden">
@@ -284,6 +313,7 @@ export default function AdminPage() {
                 onChange={(e) => setLlmBackend(e.target.value)}
                 className="w-full h-11 rounded-xl border border-border bg-canvas px-4 text-sm"
               >
+                <option value="Google Gemini 2.0 Flash">Google Gemini 2.0 Flash</option>
                 <option value="Groq Llama-3.1-8B-Instant">Groq Llama-3.1-8B-Instant</option>
                 <option value="OpenAI GPT-4o-mini">OpenAI GPT-4o-mini</option>
                 <option value="Local Ollama Llama-3">Local Ollama Llama-3</option>

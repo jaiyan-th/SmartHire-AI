@@ -64,3 +64,16 @@ class BackgroundJob(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class MentorChatMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='mentor_messages')
+    role = models.CharField(max_length=20)  # 'user' or 'assistant'
+    content = models.TextField()
+    input_source = models.CharField(max_length=20, default='text')  # 'text' or 'voice'
+    provider = models.CharField(max_length=60, blank=True, default='personalized_mentor')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']

@@ -262,3 +262,41 @@ class ProductionHardeningTests(TestCase):
             'full_name': 'Third Admin',
         }, format='json')
         self.assertEqual(retry.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_personalized_mentor_chatbot_context_persistence_and_clear(self):
+        unauth = APIClient().get('/api/core/assistant/chat')
+        self.assertEqual(unauth.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        bad_msg = self.client_cand.post('/api/core/assistant/chat', {'message': '   '}, format='json')
+        self.assertEqual(bad_msg.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Before uploading resume, assistant acknowledges no resume exists
+        chat1 = self.client_cand.post('/api/core/assistant/chat', {
+            'message': 'How is my resume ATS score?',
+            'input_source': 'voice',
+        }, format='json')
+        self.assertEqual(chat1.status_code, status.HTTP_200_OK)
+        self.assertIn("haven't uploaded a resume", chat1.data['assistant_message']['content'].lower())
+        self.assertEqual(chat1.data['user_message']['input_source'], 'voice')
+
+        # Upload resume and verify persisted history + updated profile context
+        self.client_cand.post('/api/resume/analyze', {
+            'raw_text': 'Skills: Python, PyTorch, RAG, SQL.',
+            'target_role': 'AI/ML Engineer',
+        }, format='json')
+        chat2 = self.client_cand.post('/api/core/assistant/chat', {
+            'message': 'Check my resume score now',
+            'input_source': 'text',
+        }, format='json')
+        self.assertEqual(chat2.status_code, status.HTTP_200_OK)
+        self.assertTrue(chat2.data['context_summary']['has_resume'])
+        self.assertIn('ATS alignment', chat2.data['assistant_message']['content'])
+
+        hist = self.client_cand.get('/api/core/assistant/chat')
+        self.assertEqual(hist.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(hist.data['messages']), 4)
+
+        cleared = self.client_cand.delete('/api/core/assistant/chat')
+        self.assertEqual(cleared.status_code, status.HTTP_200_OK)
+        hist_after = self.client_cand.get('/api/core/assistant/chat')
+        self.assertEqual(len(hist_after.data['messages']), 0)
