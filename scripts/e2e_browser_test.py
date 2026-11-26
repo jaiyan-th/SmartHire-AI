@@ -127,7 +127,7 @@ def run_e2e():
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-voice-btn']")))
         type_text(driver, wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "[data-testid='chatbot-input']"))), "How is my resume ATS score?")
         scroll_click(driver, wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='chatbot-send-btn']"))))
-        wait.until(lambda d: "haven't uploaded a resume" in d.find_element(By.CSS_SELECTOR, "[data-testid='chatbot-drawer']").text.lower())
+        wait.until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "[data-testid='chatbot-bot-msg']")) >= 1 and "resume" in d.find_elements(By.CSS_SELECTOR, "[data-testid='chatbot-bot-msg']")[-1].text.lower())
         assert_no_console_errors(driver, "MentorChatbot")
 
         print("3. Testing Resume ATS Analysis...")

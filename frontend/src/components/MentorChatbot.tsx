@@ -350,6 +350,7 @@ export function MentorChatbot() {
                 messages.map((m) => (
                   <div
                     key={m.id}
+                    data-testid={m.role === 'assistant' ? 'chatbot-bot-msg' : 'chatbot-user-msg'}
                     className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
                   >
                     <div
