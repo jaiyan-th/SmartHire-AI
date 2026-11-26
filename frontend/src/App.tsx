@@ -82,6 +82,7 @@ function AnimatedRoutes() {
           <Routes location={location}>
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
+            <Route path="/auth/oauth/:provider" element={<AuthPage />} />
 
             <Route
               path="/dashboard"

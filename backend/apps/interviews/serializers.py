@@ -9,13 +9,25 @@ class InterviewQuestionSerializer(serializers.ModelSerializer):
 
 
 class InterviewAnswerSerializer(serializers.ModelSerializer):
+    media_recording_url = serializers.SerializerMethodField()
+
     class Meta:
         model = InterviewAnswer
         fields = [
             'id', 'question', 'input_mode', 'language', 'transcript_text', 'code_text',
             'wpm', 'filler_words_count', 'filler_words_detected',
-            'eye_contact_percentage', 'duration_seconds', 'created_at', 'updated_at'
+            'eye_contact_percentage', 'attention_score', 'engagement_score',
+            'dominant_emotion', 'grammar_score', 'pronunciation_score',
+            'media_recording_url', 'duration_seconds', 'created_at', 'updated_at'
         ]
+
+    def get_media_recording_url(self, obj):
+        if obj.media_recording:
+            try:
+                return obj.media_recording.url
+            except Exception:
+                return None
+        return None
 
 
 class InterviewSessionSerializer(serializers.ModelSerializer):

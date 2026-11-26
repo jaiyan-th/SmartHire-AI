@@ -11,6 +11,8 @@ from .views import (
     VerifyEmailView,
     ResendVerificationView,
     AuthProvidersView,
+    OAuthLoginStartView,
+    OAuthCallbackView,
     BootstrapAdminView,
     ExportUserDataView,
 )
@@ -20,6 +22,8 @@ urlpatterns = [
     path('register/', RegisterView.as_view(), name='auth_register_slash'),
     path('login', LoginView.as_view(), name='auth_login'),
     path('login/', LoginView.as_view(), name='auth_login_slash'),
+    path('oauth/<str:provider>/start', OAuthLoginStartView.as_view(), name='auth_oauth_start'),
+    path('oauth/<str:provider>/callback', OAuthCallbackView.as_view(), name='auth_oauth_callback'),
     path('logout', LogoutView.as_view(), name='auth_logout'),
     path('logout/', LogoutView.as_view(), name='auth_logout_slash'),
     path('me', ProfileView.as_view(), name='auth_me'),

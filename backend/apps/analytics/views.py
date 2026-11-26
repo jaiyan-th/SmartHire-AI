@@ -92,8 +92,18 @@ class InsightsAnalyticsView(views.APIView):
         wpm_vals = [a.wpm for a in answers if a.wpm > 0]
         avg_wpm = round(sum(wpm_vals) / len(wpm_vals)) if wpm_vals else 0
         total_fillers = sum(a.filler_words_count for a in answers)
+        grammar_vals = [a.grammar_score for a in answers if getattr(a, 'grammar_score', 0) > 0]
+        pron_vals = [a.pronunciation_score for a in answers if getattr(a, 'pronunciation_score', 0) > 0]
+        avg_grammar = round(sum(grammar_vals) / len(grammar_vals), 1) if grammar_vals else None
+        avg_pronunciation = round(sum(pron_vals) / len(pron_vals), 1) if pron_vals else None
         eye_vals = [a.eye_contact_percentage for a in answers if a.eye_contact_percentage > 0]
+        attn_vals = [a.attention_score for a in answers if getattr(a, 'attention_score', 0) > 0]
+        eng_vals = [a.engagement_score for a in answers if getattr(a, 'engagement_score', 0) > 0]
         avg_eye = round(sum(eye_vals) / len(eye_vals), 1) if eye_vals else None
+        avg_attention = round(sum(attn_vals) / len(attn_vals), 1) if attn_vals else None
+        avg_engagement = round(sum(eng_vals) / len(eng_vals), 1) if eng_vals else None
+        emotions = [a.dominant_emotion for a in answers if getattr(a, 'dominant_emotion', '')]
+        dominant_emotion = max(set(emotions), key=emotions.count) if emotions else 'Neutral'
 
         radar_data = [
             {'subject': 'Technical', 'candidate': target_eval.technical_relevance_score, 'benchmark': 75},
@@ -135,18 +145,36 @@ class InsightsAnalyticsView(views.APIView):
                 'communication': {
                     'weight': '30%',
                     'score': target_eval.communication_score,
-                    'metric': f"{avg_wpm} Avg WPM, {total_fillers} Fillers" if avg_wpm else f"{total_fillers} Fillers (Written/Code)",
+                    'metric': (
+                        f"{avg_wpm} WPM · Grammar {avg_grammar or '—'}% · Clarity {avg_pronunciation or '—'}%"
+                        if avg_wpm
+                        else f"{total_fillers} Fillers (Written/Code)"
+                    ),
                 },
                 'confidence': {
                     'weight': '25%',
                     'score': target_eval.confidence_score,
-                    'metric': f"{avg_eye}% Gaze Stability" if avg_eye is not None else "Speech Fluency Based (Camera Off)",
+                    'metric': (
+                        f"Gaze {avg_eye}% · Attn {avg_attention or avg_eye}% · {dominant_emotion}"
+                        if avg_eye is not None
+                        else "Speech Fluency Based (Camera Off)"
+                    ),
                 },
                 'professionalism': {
                     'weight': '15%',
                     'score': target_eval.professionalism_score,
                     'metric': "Time & Structure Adherence",
                 },
+            },
+            'behavior_summary': {
+                'avg_wpm': avg_wpm,
+                'total_fillers': total_fillers,
+                'avg_grammar_score': avg_grammar,
+                'avg_pronunciation_score': avg_pronunciation,
+                'avg_eye_contact': avg_eye,
+                'avg_attention_score': avg_attention,
+                'avg_engagement_score': avg_engagement,
+                'dominant_emotion': dominant_emotion,
             },
             'progression': progression_data,
             'radar': radar_data,

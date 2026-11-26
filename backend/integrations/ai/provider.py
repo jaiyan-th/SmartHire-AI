@@ -640,3 +640,60 @@ class AIProviderService:
             "- Navigating SmartHire's privacy controls, dossiers, or custom targets\n\n"
             f"**Suggested next action:** {next_step}"
         )
+
+    def transcribe_audio(self, audio_bytes: bytes, filename: str = 'recording.webm', content_type: str = 'audio/webm') -> dict:
+        """
+        Transcribes recorded candidate interview audio via Groq Whisper (`whisper-large-v3-turbo` /
+        `whisper-large-v3`) or OpenAI Whisper when configured.
+        """
+        if not audio_bytes:
+            return {'transcript': '', 'provider': 'none', 'error': 'Empty audio payload.'}
+
+        groq_key = os.getenv('GROQ_API_KEY', '').strip()
+        openai_key = os.getenv('OPENAI_API_KEY', '').strip()
+
+        endpoints = []
+        if groq_key:
+            endpoints.append(('groq', 'https://api.groq.com/openai/v1/audio/transcriptions', groq_key, 'whisper-large-v3-turbo'))
+            endpoints.append(('groq', 'https://api.groq.com/openai/v1/audio/transcriptions', groq_key, 'whisper-large-v3'))
+        if openai_key:
+            base = (os.getenv('OPENAI_BASE_URL', '').strip() or 'https://api.openai.com/v1').rstrip('/')
+            endpoints.append(('openai', f'{base}/audio/transcriptions', openai_key, 'whisper-1'))
+
+        if not endpoints:
+            return {
+                'transcript': '',
+                'provider': 'browser_speech_only',
+                'error': 'No Whisper API key configured (add GROQ_API_KEY or OPENAI_API_KEY for server STT).',
+            }
+
+        last_err = ''
+        for prov_name, url, key, model_name in endpoints:
+            t0 = time.monotonic()
+            try:
+                resp = requests.post(
+                    url,
+                    headers={'Authorization': f'Bearer {key}'},
+                    files={'file': (filename, audio_bytes, content_type)},
+                    data={'model': model_name, 'language': 'en', 'response_format': 'json'},
+                    timeout=35,
+                )
+                latency_ms = int((time.monotonic() - t0) * 1000)
+                if resp.status_code == 200:
+                    payload = resp.json()
+                    text = str(payload.get('text') or '').strip()
+                    self._record_usage(
+                        operation='speech_stt',
+                        provider=prov_name,
+                        model_name=model_name,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        latency_ms=latency_ms,
+                        success=True,
+                    )
+                    return {'transcript': text, 'provider': f'{prov_name}:{model_name}'}
+                last_err = f'{resp.status_code}: {resp.text[:160]}'
+            except Exception as exc:
+                last_err = str(exc)
+
+        return {'transcript': '', 'provider': 'whisper_error', 'error': last_err or 'Whisper transcription failed.'}

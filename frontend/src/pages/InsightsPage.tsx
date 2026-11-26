@@ -271,6 +271,25 @@ export default function InsightsPage() {
             </div>
           </section>
 
+          {/* Speech, Grammar & Behavioral Vision Telemetry */}
+          {data.behavior_summary && (
+            <section className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+              {[
+                { label: 'SPEECH PACE', val: data.behavior_summary.avg_wpm ? `${data.behavior_summary.avg_wpm} WPM` : 'Written' },
+                { label: 'GRAMMAR QUALITY', val: data.behavior_summary.avg_grammar_score ? `${data.behavior_summary.avg_grammar_score}%` : '—' },
+                { label: 'PRONUNCIATION', val: data.behavior_summary.avg_pronunciation_score ? `${data.behavior_summary.avg_pronunciation_score}%` : '—' },
+                { label: 'EYE CONTACT', val: data.behavior_summary.avg_eye_contact !== null ? `${data.behavior_summary.avg_eye_contact}%` : 'Cam Off' },
+                { label: 'ATTENTION', val: data.behavior_summary.avg_attention_score !== null ? `${data.behavior_summary.avg_attention_score}%` : 'Cam Off' },
+                { label: 'EXPRESSION', val: data.behavior_summary.dominant_emotion || 'Neutral' },
+              ].map((m) => (
+                <div key={m.label} className="rounded-xl border border-border bg-surface p-4">
+                  <div className="font-mono text-[10px] text-ink-muted">{m.label}</div>
+                  <div className="font-display text-lg font-medium mt-1 text-ink">{m.val}</div>
+                </div>
+              ))}
+            </section>
+          )}
+
           {/* Qualitative Strengths, Gaps & Resources */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="rounded-2xl p-7 card-elevated space-y-3">
@@ -351,6 +370,22 @@ export default function InsightsPage() {
                           className="overflow-hidden border-t border-border bg-canvas/60"
                         >
                           <div className="px-6 py-5 space-y-3 text-sm">
+                            <div className="flex flex-wrap gap-2 font-mono text-[11px] text-ink-secondary">
+                              {qe.wpm > 0 && <span className="px-2 py-0.5 rounded bg-surface border border-border">{qe.wpm} WPM</span>}
+                              {Boolean(qe.grammar_score) && <span className="px-2 py-0.5 rounded bg-surface border border-border">Grammar {qe.grammar_score}%</span>}
+                              {Boolean(qe.pronunciation_score) && <span className="px-2 py-0.5 rounded bg-surface border border-border">Pronunciation {qe.pronunciation_score}%</span>}
+                              {Boolean(qe.eye_contact_percentage) && (
+                                <span className="px-2 py-0.5 rounded bg-surface border border-border">
+                                  Eye Contact {qe.eye_contact_percentage}% · {qe.dominant_emotion || 'Neutral'}
+                                </span>
+                              )}
+                            </div>
+                            {qe.media_recording_url && (
+                              <div className="rounded-xl border border-border bg-surface p-3 space-y-1.5">
+                                <span className="font-mono text-[10px] text-ink-muted block">SESSION RECORDING PLAYBACK</span>
+                                <video controls src={qe.media_recording_url} className="w-full max-h-56 rounded-lg bg-black" />
+                              </div>
+                            )}
                             <div>
                               <span className="font-mono text-[11px] text-ink-muted block mb-1">YOUR RESPONSE</span>
                               <p className="text-ink whitespace-pre-wrap">{qe.candidate_response}</p>

@@ -26,6 +26,7 @@ export default function RecruiterPage() {
   const [domainFilter, setDomainFilter] = useState('all');
   const [tierFilter, setTierFilter] = useState('all');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'rank' | 'recent'>('rank');
 
   // Modals
   const [activeCandidate, setActiveCandidate] = useState<RecruiterCandidate | null>(null);
@@ -80,14 +81,18 @@ export default function RecruiterPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return candidates.filter((c) => {
+    const list = candidates.filter((c) => {
       const mName = c.candidate_name.toLowerCase().includes(q) || c.candidate_email.toLowerCase().includes(q);
       const mDom = domainFilter === 'all' || c.domain === domainFilter;
       const mTier = tierFilter === 'all' || c.scores?.rating_band === tierFilter;
       const mFlag = !flaggedOnly || c.proctoring_flagged || c.recruiter_status === 'flagged_for_review';
       return mName && mDom && mTier && mFlag;
     });
-  }, [candidates, search, domainFilter, tierFilter, flaggedOnly]);
+    if (sortBy === 'rank') {
+      return [...list].sort((a, b) => (b.scores?.overall ?? -1) - (a.scores?.overall ?? -1));
+    }
+    return list;
+  }, [candidates, search, domainFilter, tierFilter, flaggedOnly, sortBy]);
 
   const toggleCompare = (sid: string) => {
     setSelectedIds((prev) => (prev.includes(sid) ? prev.filter((id) => id !== sid) : [...prev, sid]));
@@ -269,6 +274,15 @@ export default function RecruiterPage() {
                       <option value="Good">Good</option>
                       <option value="Average">Average</option>
                     </select>
+                    <select
+                      aria-label="Sort candidates"
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as 'rank' | 'recent')}
+                      className="h-11 rounded-xl border border-border bg-surface px-4 text-sm"
+                    >
+                      <option value="rank">Rank (Top Score First)</option>
+                      <option value="recent">Most Recent</option>
+                    </select>
                       <label className="inline-flex items-center gap-2 text-sm text-ink-secondary cursor-pointer px-2">
                         <input
                           type="checkbox"
@@ -292,6 +306,7 @@ export default function RecruiterPage() {
                             <thead className="border-b border-border bg-canvas font-mono text-xs text-ink-muted">
                               <tr>
                                 <th className="px-4 py-3">Compare</th>
+                                <th className="px-4 py-3">Rank</th>
                                 <th className="px-4 py-3">Candidate</th>
                                 <th className="px-4 py-3">Track</th>
                                 <th className="px-4 py-3">Tech</th>
@@ -304,7 +319,7 @@ export default function RecruiterPage() {
                             <tbody className="divide-y divide-border">
                               {filtered.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-14 text-center text-ink-muted text-sm">
+                                    <td colSpan={9} className="px-6 py-14 text-center text-ink-muted text-sm">
                                       No shared or assigned candidate sessions yet. Click Assign above to invite a candidate or wait for candidates to share results.
                                     </td>
                                 </tr>
@@ -327,6 +342,16 @@ export default function RecruiterPage() {
                                           className="h-4 w-4"
                                         />
                                       </td>
+                                        <td className="px-4 py-4 font-mono text-xs">
+                                          {c.rank ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-2 text-ink">
+                                              #{c.rank}
+                                              {c.percentile ? <span className="text-ink-muted">({c.percentile}p)</span> : null}
+                                            </span>
+                                          ) : (
+                                            '—'
+                                          )}
+                                        </td>
                                         <td className="px-5 py-4">
                                           <div className="font-medium text-ink">{c.candidate_name}</div>
                                           <div className="text-xs text-ink-muted">{c.candidate_email}</div>

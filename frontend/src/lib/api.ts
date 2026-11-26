@@ -8,6 +8,7 @@ import type {
   MentorChatHistoryResponse,
   MentorContextSummary,
   MentorMessage,
+  PlatformNotification,
   RecruiterCandidate,
   ResumeRecord,
   SkillGapResponse,
@@ -245,6 +246,26 @@ class SmartHireAPIClient {
     }>('/api/auth/providers');
   }
 
+  startOAuthLogin(provider: 'google' | 'github', redirectUri: string) {
+    return this.request<{ authorization_url: string; state: string }>(
+      `/api/auth/oauth/${provider}/start?redirect_uri=${encodeURIComponent(redirectUri)}`,
+    );
+  }
+
+  async completeOAuthCallback(provider: 'google' | 'github', code: string, state: string, redirectUri: string) {
+    const res = await this.request<{
+      message: string;
+      user: User;
+      token: string;
+      tokens: { access: string; refresh: string };
+    }>(`/api/auth/oauth/${provider}/callback`, {
+      method: 'POST',
+      body: JSON.stringify({ code, state, redirect_uri: redirectUri }),
+    });
+    this.setSession(res.tokens?.access || res.token, res.user, res.tokens?.refresh || null);
+    return res;
+  }
+
   bootstrapAdmin(data: { email: string; password: string; full_name: string }) {
     return this.request<{
       message: string;
@@ -366,8 +387,47 @@ class SmartHireAPIClient {
     code_text: string;
     duration_seconds: number;
     eye_contact_percentage: number;
+    attention_score?: number;
+    engagement_score?: number;
+    dominant_emotion?: string;
     next_question_index?: number;
+    media_recording?: Blob | null;
   }) {
+    if (answerData.media_recording) {
+      const fd = new FormData();
+      fd.append('session_id', answerData.session_id);
+      fd.append('question_id', answerData.question_id);
+      fd.append('input_mode', answerData.input_mode);
+      fd.append('language', answerData.language);
+      fd.append('transcript_text', answerData.transcript_text);
+      fd.append('code_text', answerData.code_text);
+      fd.append('duration_seconds', String(answerData.duration_seconds));
+      fd.append('eye_contact_percentage', String(answerData.eye_contact_percentage));
+      if (answerData.attention_score !== undefined) fd.append('attention_score', String(answerData.attention_score));
+      if (answerData.engagement_score !== undefined) fd.append('engagement_score', String(answerData.engagement_score));
+      if (answerData.dominant_emotion) fd.append('dominant_emotion', answerData.dominant_emotion);
+      if (answerData.next_question_index !== undefined) {
+        fd.append('next_question_index', String(answerData.next_question_index));
+      }
+      fd.append('media_recording', answerData.media_recording, `answer_${answerData.question_id}.webm`);
+      return this.request<{
+        message: string;
+        answer: InterviewSession['answers'][number];
+        speech_analysis: {
+          word_count: number;
+          wpm: number;
+          filler_count: number;
+          grammar_score?: number;
+          pronunciation_score?: number;
+          clarity: string;
+        };
+        next_question_index: number;
+      }>('/api/interview/answer', {
+        method: 'POST',
+        body: fd,
+      });
+    }
+
     return this.request<{
       message: string;
       answer: InterviewSession['answers'][number];
@@ -375,12 +435,34 @@ class SmartHireAPIClient {
         word_count: number;
         wpm: number;
         filler_count: number;
+        grammar_score?: number;
+        pronunciation_score?: number;
         clarity: string;
       };
       next_question_index: number;
     }>('/api/interview/answer', {
       method: 'POST',
       body: JSON.stringify(answerData),
+    });
+  }
+
+  transcribeAudio(audioBlob: Blob) {
+    const fd = new FormData();
+    fd.append('audio', audioBlob, 'interview_speech.webm');
+    return this.request<{ transcript: string; provider: string; error?: string }>('/api/interview/transcribe', {
+      method: 'POST',
+      body: fd,
+    });
+  }
+
+  getNotifications() {
+    return this.request<{ notifications: PlatformNotification[]; unread_count: number }>('/api/core/notifications');
+  }
+
+  markNotificationsRead(id?: string) {
+    return this.request<{ unread_count: number }>('/api/core/notifications', {
+      method: 'PATCH',
+      body: JSON.stringify(id ? { id } : {}),
     });
   }
 

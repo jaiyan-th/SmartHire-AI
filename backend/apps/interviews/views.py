@@ -1,8 +1,11 @@
+import os
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import views, status, response, permissions
 from apps.core.audit import log_audit_event
 from apps.core.models import PlatformConfig
+from apps.core.views import create_user_notification
+from integrations.ai.provider import AIProviderService
 from apps.evaluations.engine import evaluate_completed_interview
 from apps.evaluations.models import Evaluation
 from apps.evaluations.serializers import EvaluationSerializer
@@ -255,6 +258,14 @@ class ProctoringTelemetryView(views.APIView):
         if tab_switches >= 3 and not session.proctoring_flagged:
             session.proctoring_flagged = True
             session.save(update_fields=['proctoring_flagged'])
+            if session.assigned_by:
+                create_user_notification(
+                    user=session.assigned_by,
+                    title='Proctoring integrity alert',
+                    message=f'{request.user.email} triggered {tab_switches} tab switches during {session.domain} assessment.',
+                    category='alert',
+                    link='/recruiter',
+                )
 
         log_audit_event(
             'PROCTORING_TELEMETRY',
@@ -283,14 +294,25 @@ class SubmitAnswerView(views.APIView):
         language = str(request.data.get('language', 'python')).strip()[:30]
         transcript_text = str(request.data.get('transcript_text') or '').strip()[:15000]
         code_text = str(request.data.get('code_text') or '').strip()[:25000]
+        media_file = request.FILES.get('media_recording')
+        dominant_emotion = str(request.data.get('dominant_emotion') or 'Neutral').strip()[:40]
 
         try:
             duration_seconds = _parse_int(request.data.get('duration_seconds'), 30, 1, 3600, 'duration_seconds')
             eye_contact = _parse_float(request.data.get('eye_contact_percentage'), 0.0, 0.0, 100.0, 'eye_contact_percentage')
+            attention_score = _parse_float(request.data.get('attention_score'), eye_contact, 0.0, 100.0, 'attention_score')
+            engagement_score = _parse_float(request.data.get('engagement_score'), eye_contact, 0.0, 100.0, 'engagement_score')
             next_idx_raw = request.data.get('next_question_index')
             next_idx = _parse_int(next_idx_raw, None, 0, 100, 'next_question_index') if next_idx_raw is not None else None
         except ValueError as exc:
             return response.Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if media_file:
+            if getattr(media_file, 'size', 0) > 12 * 1024 * 1024:
+                return response.Response({'error': 'Media recording exceeds 12 MB limit.'}, status=status.HTTP_400_BAD_REQUEST)
+            ext = os.path.splitext(media_file.name or '')[1].lower()
+            if ext not in ('.webm', '.mp4', '.ogg', '.wav', '.m4a', '.mp3'):
+                return response.Response({'error': 'Unsupported media recording format.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             session = InterviewSession.objects.get(id=session_id)
@@ -305,6 +327,8 @@ class SubmitAnswerView(views.APIView):
 
         if not session.camera_enabled:
             eye_contact = 0.0
+            attention_score = 0.0
+            engagement_score = 0.0
 
         try:
             if question_id:
@@ -317,6 +341,17 @@ class SubmitAnswerView(views.APIView):
         except (InterviewQuestion.DoesNotExist, IndexError, ValueError):
             return response.Response({'error': 'Question not found for this session.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        if media_file and not transcript_text and session.recording_consent:
+            audio_bytes = media_file.read()
+            media_file.seek(0)
+            stt = AIProviderService(user_email=request.user.email).transcribe_audio(
+                audio_bytes=audio_bytes,
+                filename=os.path.basename(media_file.name or 'answer.webm'),
+                content_type=getattr(media_file, 'content_type', 'audio/webm') or 'audio/webm',
+            )
+            if stt.get('transcript'):
+                transcript_text = stt['transcript'][:15000]
+
         combined_text = transcript_text if transcript_text else code_text
         speech_metrics = analyze_speech_content(transcript_text or combined_text, duration_seconds=duration_seconds)
 
@@ -325,20 +360,29 @@ class SubmitAnswerView(views.APIView):
                 session.status = InterviewStatus.IN_PROGRESS
                 session.started_at = session.started_at or timezone.now()
 
+            defaults = {
+                'input_mode': input_mode,
+                'language': language,
+                'transcript_text': transcript_text,
+                'code_text': code_text,
+                'wpm': speech_metrics['wpm'],
+                'filler_words_count': speech_metrics['filler_count'],
+                'filler_words_detected': speech_metrics['fillers_detected'],
+                'eye_contact_percentage': eye_contact,
+                'attention_score': attention_score,
+                'engagement_score': engagement_score,
+                'dominant_emotion': dominant_emotion,
+                'grammar_score': speech_metrics['grammar_score'],
+                'pronunciation_score': speech_metrics['pronunciation_score'],
+                'duration_seconds': duration_seconds,
+            }
+            if media_file and session.recording_consent:
+                defaults['media_recording'] = media_file
+
             answer, _ = InterviewAnswer.objects.update_or_create(
                 session=session,
                 question=question,
-                defaults={
-                    'input_mode': input_mode,
-                    'language': language,
-                    'transcript_text': transcript_text,
-                    'code_text': code_text,
-                    'wpm': speech_metrics['wpm'],
-                    'filler_words_count': speech_metrics['filler_count'],
-                    'filler_words_detected': speech_metrics['fillers_detected'],
-                    'eye_contact_percentage': eye_contact,
-                    'duration_seconds': duration_seconds,
-                },
+                defaults=defaults,
             )
 
             max_idx = max(0, session.total_questions - 1)
@@ -398,12 +442,48 @@ class FinishInterviewView(views.APIView):
             user_email=request.user.email,
             request=request,
         )
+        create_user_notification(
+            user=session.candidate,
+            title=f'Assessment Ready · {evaluation_data["overall_score"]}/100 ({evaluation_data["rating_band"]})',
+            message=f'Your {session.domain} ({session.difficulty}) mock interview dossier and 4-pillar breakdown are ready.',
+            category='evaluation',
+            link=f'/insights?session_id={session.id}',
+            send_email=True,
+        )
+        if session.is_recruiter_assigned and session.assigned_by:
+            create_user_notification(
+                user=session.assigned_by,
+                title=f'Assigned candidate completed · {session.domain}',
+                message=f'{request.user.email} completed {session.domain} ({evaluation_data["overall_score"]}/100).',
+                category='evaluation',
+                link='/recruiter',
+            )
 
         return response.Response({
             'message': 'Interview concluded and evaluated successfully',
             'session_id': str(session.id),
             'evaluation': evaluation_data,
         }, status=status.HTTP_200_OK)
+
+
+class TranscribeAudioView(views.APIView):
+    """Transcribes uploaded audio chunk via Groq Whisper / OpenAI Whisper API."""
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = 'ai_ops'
+
+    def post(self, request):
+        audio_file = request.FILES.get('audio')
+        if not audio_file:
+            return response.Response({'error': 'audio file is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if getattr(audio_file, 'size', 0) > 12 * 1024 * 1024:
+            return response.Response({'error': 'Audio clip exceeds 12 MB limit.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        res = AIProviderService(user_email=request.user.email).transcribe_audio(
+            audio_bytes=audio_file.read(),
+            filename=os.path.basename(audio_file.name or 'speech.webm'),
+            content_type=getattr(audio_file, 'content_type', 'audio/webm') or 'audio/webm',
+        )
+        return response.Response(res, status=status.HTTP_200_OK)
 
 
 class ShareSessionView(views.APIView):

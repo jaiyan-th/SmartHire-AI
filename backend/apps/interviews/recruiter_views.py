@@ -9,6 +9,7 @@ from rest_framework import views, status, response
 from apps.accounts.models import User, UserRole
 from apps.accounts.permissions import IsRecruiter
 from apps.core.audit import log_audit_event
+from apps.core.views import create_user_notification
 from apps.evaluations.models import Evaluation
 from .models import (
     InterviewSession,
@@ -130,6 +131,29 @@ class RecruiterCandidatesView(views.APIView):
                 'strengths': eval_record.strengths if eval_record else [],
                 'weaknesses': eval_record.weaknesses if eval_record else [],
             })
+
+        scored_values = sorted(
+            [c['scores']['overall'] for c in candidate_roster if c['scores']['overall'] is not None],
+            reverse=True,
+        )
+        total_scored = len(scored_values)
+        for c in candidate_roster:
+            ov = c['scores']['overall']
+            if ov is not None and total_scored > 0:
+                rank = scored_values.index(ov) + 1
+                percentile = round(((total_scored - rank + 1) / total_scored) * 100) if total_scored > 1 else 100
+                c['rank'] = rank
+                c['percentile'] = percentile
+            else:
+                c['rank'] = None
+                c['percentile'] = None
+
+        sort_mode = (request.query_params.get('sort') or '').strip().lower()
+        if sort_mode == 'rank':
+            candidate_roster.sort(
+                key=lambda item: (item['scores']['overall'] is not None, item['scores']['overall'] or -1),
+                reverse=True,
+            )
 
         avg_composite = round(total_score_accum / scored_count, 1) if scored_count else 0.0
 
@@ -281,6 +305,15 @@ class RecruiterAssignAssessmentView(views.APIView):
             level='INFO',
             user_email=request.user.email,
             request=request,
+        )
+        due_note = f" Due by {deadline.strftime('%b %d, %Y %H:%M UTC')}." if deadline else ""
+        create_user_notification(
+            user=candidate,
+            title=f'New Assessment Assigned · {domain}',
+            message=f'{request.user.full_name or request.user.email} assigned you a {difficulty} {domain} assessment.{due_note}',
+            category='assignment',
+            link=f'/interview/room/{session.id}',
+            send_email=True,
         )
 
         return response.Response({

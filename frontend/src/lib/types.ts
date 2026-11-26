@@ -39,6 +39,12 @@ export interface InterviewAnswer {
   filler_words_count: number;
   filler_words_detected: Array<{ word: string; count: number }>;
   eye_contact_percentage: number;
+  attention_score?: number;
+  engagement_score?: number;
+  dominant_emotion?: string;
+  grammar_score?: number;
+  pronunciation_score?: number;
+  media_recording_url?: string | null;
   duration_seconds: number;
   created_at: string;
   updated_at: string;
@@ -87,6 +93,13 @@ export interface QuestionEvaluation {
   improvements: string;
   wpm: number;
   filler_words_count: number;
+  grammar_score?: number;
+  pronunciation_score?: number;
+  eye_contact_percentage?: number;
+  attention_score?: number;
+  engagement_score?: number;
+  dominant_emotion?: string;
+  media_recording_url?: string | null;
   score: number;
 }
 
@@ -154,6 +167,26 @@ export interface InsightsResponse {
     practice_recommendations?: string[];
     resources: Array<{ title: string; url: string; domain?: string }>;
   };
+  behavior_summary?: {
+    avg_wpm: number;
+    total_fillers: number;
+    avg_grammar_score: number | null;
+    avg_pronunciation_score: number | null;
+    avg_eye_contact: number | null;
+    avg_attention_score: number | null;
+    avg_engagement_score: number | null;
+    dominant_emotion: string;
+  };
+}
+
+export interface PlatformNotification {
+  id: string;
+  title: string;
+  message: string;
+  category: 'reminder' | 'assignment' | 'evaluation' | 'alert' | string;
+  link: string;
+  is_read: boolean;
+  created_at: string;
 }
 
 export interface ResumeRecord {
@@ -202,6 +235,8 @@ export interface SkillGapResponse {
 
 export interface RecruiterCandidate {
   session_id: string;
+  rank?: number | null;
+  percentile?: number | null;
   candidate_name: string;
   candidate_email: string;
   domain: string;

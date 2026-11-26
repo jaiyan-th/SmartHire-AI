@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Moon, ShieldCheck, Sun } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
@@ -13,10 +13,11 @@ import { MOTION_EASE, SPRING_SNAPPY } from '@/motion/system';
 
 export default function AuthPage() {
   const [searchParams] = useSearchParams();
+  const { provider: oauthProvider } = useParams<{ provider?: string }>();
   const initialMode = searchParams.get('mode') === 'register' ? 'register' : 'login';
   const [mode, setMode] = useState<'login' | 'register' | 'setup'>(initialMode);
 
-  const { login, register, bootstrapAdmin } = useAuth();
+  const { login, register, bootstrapAdmin, completeOAuthLogin } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -60,6 +61,39 @@ export default function AuthPage() {
       })
       .catch(() => { });
   }, []);
+
+  useEffect(() => {
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    if (!oauthProvider || !code || !state) return;
+    if (oauthProvider !== 'google' && oauthProvider !== 'github') return;
+    const redirectUri = `${window.location.origin}/auth/oauth/${oauthProvider}`;
+    setSubmitting(true);
+    completeOAuthLogin(oauthProvider, code, state, redirectUri)
+      .then((signedIn) => {
+        toast(`Signed in via ${oauthProvider.toUpperCase()} as ${signedIn.email}`, 'success');
+        const next =
+          signedIn.role === 'admin' ? '/admin' : signedIn.role === 'recruiter' ? '/recruiter' : '/dashboard';
+        navigate(next, { replace: true });
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : 'OAuth2 login failed.';
+        setInlineError(msg);
+        toast(msg, 'error');
+        navigate('/auth', { replace: true });
+      })
+      .finally(() => setSubmitting(false));
+  }, [oauthProvider, searchParams, completeOAuthLogin, navigate, toast]);
+
+  const handleOAuthStart = async (provider: 'google' | 'github') => {
+    try {
+      const redirectUri = `${window.location.origin}/auth/oauth/${provider}`;
+      const res = await api.startOAuthLogin(provider, redirectUri);
+      window.location.href = res.authorization_url;
+    } catch (err) {
+      toast(err instanceof Error ? err.message : `${provider.toUpperCase()} OAuth2 is not configured yet.`, 'info');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -446,14 +480,26 @@ export default function AuthPage() {
           )}
 
           {(providers.google || providers.github) && (
-            <div className="pt-2 border-t border-border flex items-center justify-between text-xs text-ink-muted">
-              <span>Enterprise SSO</span>
-              <div className="flex gap-2">
+            <div className="pt-3 border-t border-border space-y-2.5">
+              <div className="text-[11px] font-mono uppercase text-ink-muted">Single Sign-On (OAuth2)</div>
+              <div className="flex flex-wrap gap-2">
                 {providers.google && (
-                  <span className="rounded-lg border border-border px-3 py-1.5 text-ink">Google OAuth2 Ready</span>
+                  <button
+                    type="button"
+                    onClick={() => handleOAuthStart('google')}
+                    className="flex-1 rounded-xl border border-border bg-canvas hover:border-ink px-3.5 py-2 text-xs font-medium text-ink transition-colors cursor-pointer"
+                  >
+                    Continue with Google
+                  </button>
                 )}
                 {providers.github && (
-                  <span className="rounded-lg border border-border px-3 py-1.5 text-ink">GitHub SSO Ready</span>
+                  <button
+                    type="button"
+                    onClick={() => handleOAuthStart('github')}
+                    className="flex-1 rounded-xl border border-border bg-canvas hover:border-ink px-3.5 py-2 text-xs font-medium text-ink transition-colors cursor-pointer"
+                  >
+                    Continue with GitHub
+                  </button>
                 )}
               </div>
             </div>

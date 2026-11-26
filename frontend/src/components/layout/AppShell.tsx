@@ -30,7 +30,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { api } from '@/lib/api';
-import type { InterviewSession } from '@/lib/types';
+import type { InterviewSession, PlatformNotification } from '@/lib/types';
 import { MOTION_EASE, SPRING_SNAPPY } from '@/motion/system';
 
 interface AppShellProps {
@@ -56,6 +56,8 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
 
   const [healthStatus, setHealthStatus] = useState<'ready' | 'offline'>('ready');
   const [assignedSessions, setAssignedSessions] = useState<InterviewSession[]>([]);
+  const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const [profName, setProfName] = useState(user?.full_name || '');
   const [profHeadline, setProfHeadline] = useState(user?.headline || '');
@@ -81,6 +83,14 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
       .getInterviewHistory()
       .then((list) => {
         setAssignedSessions(list.filter((s) => s.is_recruiter_assigned || s.status === 'ready').slice(0, 5));
+      })
+      .catch(() => {});
+
+    api
+      .getNotifications()
+      .then((res) => {
+        setNotifications(res.notifications || []);
+        setUnreadCount(res.unread_count || 0);
       })
       .catch(() => {});
   }, []);
@@ -345,7 +355,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
               className="relative h-10 w-10 inline-flex items-center justify-center rounded-xl border border-border bg-surface text-ink-secondary hover:text-ink transition-colors"
             >
               <Bell className="h-4 w-4" />
-              {assignedSessions.length > 0 && (
+              {(unreadCount > 0 || assignedSessions.length > 0) && (
                 <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[#C9F45B] ring-1 ring-[#111111]/25" />
               )}
             </button>
@@ -468,40 +478,97 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
       <Modal
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
-        title="Assessment Activity"
-        description="Pending and recruiter-assigned sessions."
+        title="Notifications & Reminders"
+        description="Session alerts, deadline reminders, and completed evaluation notices."
       >
-        {assignedSessions.length === 0 ? (
-          <p className="text-sm text-ink-secondary py-4">No pending assessments right now.</p>
-        ) : (
-          <div className="space-y-3">
-            {assignedSessions.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between rounded-xl border border-border bg-canvas p-4"
+        <div className="space-y-4">
+          {unreadCount > 0 && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  api.markNotificationsRead().then((r) => {
+                    setUnreadCount(r.unread_count);
+                    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+                  }).catch(() => {});
+                }}
+                className="text-xs font-mono text-ink-secondary hover:text-ink underline"
               >
-                <div>
-                  <div className="text-sm font-medium text-ink">
-                    {s.domain} ({s.difficulty})
-                  </div>
-                  <div className="text-xs text-ink-muted font-mono mt-0.5">
-                    {s.is_recruiter_assigned ? 'Recruiter Assigned' : 'Practice'} · {s.status}
+                Mark all read ({unreadCount})
+              </button>
+            </div>
+          )}
+
+          {notifications.length === 0 && assignedSessions.length === 0 ? (
+            <p className="text-sm text-ink-secondary py-4">No notifications or pending assessments right now.</p>
+          ) : (
+            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+              {notifications.map((n) => (
+                <div
+                  key={n.id}
+                  className={`rounded-xl border p-3.5 transition-colors ${
+                    n.is_read ? 'border-border bg-canvas/50' : 'border-ink/30 bg-canvas'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] uppercase px-1.5 py-0.5 rounded bg-surface-2 text-ink-secondary">
+                          {n.category}
+                        </span>
+                        <span className="text-xs font-medium text-ink truncate">{n.title}</span>
+                      </div>
+                      <p className="text-xs text-ink-secondary">{n.message}</p>
+                    </div>
+                    {n.link && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          if (!n.is_read) {
+                            api.markNotificationsRead(n.id).catch(() => {});
+                            setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
+                            setUnreadCount((c) => Math.max(0, c - 1));
+                          }
+                          navigate(n.link);
+                        }}
+                      >
+                        Open
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="accent"
-                  onClick={() => {
-                    setNotificationsOpen(false);
-                    navigate(`/interview/room/${s.id}`);
-                  }}
+              ))}
+
+              {assignedSessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between rounded-xl border border-border bg-canvas p-3.5"
                 >
-                  Open
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
+                  <div>
+                    <div className="text-xs font-medium text-ink">
+                      {s.domain} ({s.difficulty})
+                    </div>
+                    <div className="text-[11px] text-ink-muted font-mono mt-0.5">
+                      {s.is_recruiter_assigned ? 'Recruiter Assigned' : 'Ready Session'} · {s.status}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="accent"
+                    onClick={() => {
+                      setNotificationsOpen(false);
+                      navigate(`/interview/room/${s.id}`);
+                    }}
+                  >
+                    Open
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* Profile & Privacy Modal */}

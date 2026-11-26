@@ -15,6 +15,7 @@ interface AuthContextValue {
     organization?: string;
   }) => Promise<User>;
   bootstrapAdmin: (payload: { email: string; password: string; full_name: string }) => Promise<User>;
+  completeOAuthLogin: (provider: 'google' | 'github', code: string, state: string, redirectUri: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateLocalUser: (user: User) => void;
@@ -89,6 +90,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return res.user;
   };
 
+  const completeOAuthLogin = async (
+    provider: 'google' | 'github',
+    code: string,
+    state: string,
+    redirectUri: string,
+  ) => {
+    const res = await api.completeOAuthCallback(provider, code, state, redirectUri);
+    setUser(res.user);
+    return res.user;
+  };
+
   const logout = async () => {
     await api.logout();
     setUser(null);
@@ -109,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         register,
         bootstrapAdmin,
+        completeOAuthLogin,
         logout,
         refreshProfile,
         updateLocalUser,

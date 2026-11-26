@@ -1,10 +1,13 @@
 from datetime import timedelta
 import os
+from urllib.parse import urlencode
+import requests
 from django.conf import settings
 from django.contrib.auth.models import update_last_login
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.utils import timezone
 from rest_framework import views, status, response, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -340,6 +343,167 @@ class AuthProvidersView(views.APIView):
             'google_oauth2': {'enabled': google_configured},
             'github_sso': {'enabled': github_configured},
         })
+
+
+class OAuthLoginStartView(views.APIView):
+    """Generates a signed OAuth2 authorization redirect URL for Google or GitHub."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, provider):
+        provider = str(provider).lower().strip()
+        if provider not in ('google', 'github'):
+            return response.Response({'error': 'Unsupported OAuth2 provider.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        redirect_uri = str(
+            request.query_params.get('redirect_uri')
+            or request.build_absolute_uri(f'/auth/oauth/{provider}')
+        ).strip()
+        signer = TimestampSigner(salt='smarthire-oauth2-state')
+        state = signer.sign(provider)
+
+        if provider == 'google':
+            client_id = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '').strip()
+            if not client_id:
+                return response.Response({'error': 'Google OAuth2 client ID is not configured.'}, status=status.HTTP_400_BAD_REQUEST)
+            params = urlencode({
+                'client_id': client_id,
+                'redirect_uri': redirect_uri,
+                'response_type': 'code',
+                'scope': 'openid email profile',
+                'state': state,
+                'prompt': 'select_account',
+            })
+            return response.Response({'authorization_url': f'https://accounts.google.com/o/oauth2/v2/auth?{params}', 'state': state})
+
+        client_id = os.getenv('GITHUB_OAUTH_CLIENT_ID', '').strip()
+        if not client_id:
+            return response.Response({'error': 'GitHub OAuth2 client ID is not configured.'}, status=status.HTTP_400_BAD_REQUEST)
+        params = urlencode({
+            'client_id': client_id,
+            'redirect_uri': redirect_uri,
+            'scope': 'read:user user:email',
+            'state': state,
+        })
+        return response.Response({'authorization_url': f'https://github.com/login/oauth/authorize?{params}', 'state': state})
+
+
+class OAuthCallbackView(views.APIView):
+    """Exchanges Google/GitHub authorization code for verified email & issues SimpleJWT tokens."""
+    permission_classes = [permissions.AllowAny]
+    throttle_scope = 'auth_login'
+
+    def post(self, request, provider):
+        provider = str(provider).lower().strip()
+        code = str(request.data.get('code') or '').strip()
+        state = str(request.data.get('state') or '').strip()
+        redirect_uri = str(request.data.get('redirect_uri') or '').strip()
+
+        if provider not in ('google', 'github') or not code or not state:
+            return response.Response({'error': 'Provider, code, and state are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        signer = TimestampSigner(salt='smarthire-oauth2-state')
+        try:
+            signed_provider = signer.unsign(state, max_age=600)
+            if signed_provider != provider:
+                raise BadSignature('Provider mismatch')
+        except (BadSignature, SignatureExpired):
+            return response.Response({'error': 'Invalid or expired OAuth2 state token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = ''
+        full_name = ''
+
+        try:
+            if provider == 'google':
+                cid = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '').strip()
+                secret = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET', '').strip()
+                if not cid or not secret:
+                    return response.Response({'error': 'Google OAuth2 credentials are not configured.'}, status=status.HTTP_400_BAD_REQUEST)
+                tok_res = requests.post(
+                    'https://oauth2.googleapis.com/token',
+                    data={
+                        'code': code,
+                        'client_id': cid,
+                        'client_secret': secret,
+                        'redirect_uri': redirect_uri,
+                        'grant_type': 'authorization_code',
+                    },
+                    timeout=15,
+                )
+                tok_res.raise_for_status()
+                access_tok = tok_res.json().get('access_token')
+                prof_res = requests.get(
+                    'https://www.googleapis.com/oauth2/v2/userinfo',
+                    headers={'Authorization': f'Bearer {access_tok}'},
+                    timeout=15,
+                )
+                prof_res.raise_for_status()
+                prof = prof_res.json()
+                if prof.get('verified_email', True):
+                    email = str(prof.get('email') or '').strip().lower()
+                full_name = str(prof.get('name') or '').strip()
+            else:
+                cid = os.getenv('GITHUB_OAUTH_CLIENT_ID', '').strip()
+                secret = os.getenv('GITHUB_OAUTH_CLIENT_SECRET', '').strip()
+                if not cid or not secret:
+                    return response.Response({'error': 'GitHub OAuth2 credentials are not configured.'}, status=status.HTTP_400_BAD_REQUEST)
+                tok_res = requests.post(
+                    'https://github.com/login/oauth/access_token',
+                    headers={'Accept': 'application/json'},
+                    data={'client_id': cid, 'client_secret': secret, 'code': code, 'redirect_uri': redirect_uri},
+                    timeout=15,
+                )
+                tok_res.raise_for_status()
+                access_tok = tok_res.json().get('access_token')
+                headers = {'Authorization': f'Bearer {access_tok}', 'Accept': 'application/json'}
+                user_res = requests.get('https://api.github.com/user', headers=headers, timeout=15)
+                user_res.raise_for_status()
+                u_json = user_res.json()
+                full_name = str(u_json.get('name') or u_json.get('login') or '').strip()
+                emails_res = requests.get('https://api.github.com/user/emails', headers=headers, timeout=15)
+                emails_res.raise_for_status()
+                verified_emails = [e for e in emails_res.json() if e.get('verified')]
+                primary = next((e for e in verified_emails if e.get('primary')), verified_emails[0] if verified_emails else None)
+                email = str(primary['email']).strip().lower() if primary else ''
+        except Exception:
+            return response.Response({'error': f'Failed to complete {provider} OAuth2 verification.'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        if not email:
+            return response.Response({'error': 'No verified email returned by OAuth2 provider.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        import uuid as _uuid
+        user = User.objects.filter(email__iexact=email).first()
+        if user:
+            if not user.is_active:
+                return response.Response({'error': 'Account deactivated.'}, status=status.HTTP_403_FORBIDDEN)
+            if not user.is_email_verified:
+                user.is_email_verified = True
+                user.save(update_fields=['is_email_verified', 'updated_at'])
+        else:
+            base = email.split('@')[0][:20]
+            user = User.objects.create_user(
+                username=f"{base}_{_uuid.uuid4().hex[:8]}",
+                email=email,
+                password=None,
+                full_name=full_name or base.title(),
+                role=UserRole.CANDIDATE,
+                is_email_verified=True,
+            )
+
+        refresh = RefreshToken.for_user(user)
+        update_last_login(None, user)
+        log_audit_event(
+            'AUTH_OAUTH_LOGIN',
+            f"User {user.email} authenticated via {provider} OAuth2.",
+            level='INFO',
+            user_email=user.email,
+            request=request,
+        )
+        return response.Response({
+            'message': f'Authenticated via {provider.title()}.',
+            'user': UserSerializer(user).data,
+            'token': str(refresh.access_token),
+            'tokens': {'access': str(refresh.access_token), 'refresh': str(refresh)},
+        }, status=status.HTTP_200_OK)
 
 
 class BootstrapAdminView(views.APIView):

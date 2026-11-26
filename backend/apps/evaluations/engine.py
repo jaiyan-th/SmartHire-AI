@@ -79,6 +79,9 @@ def evaluate_completed_interview(session):
     wpm_samples = 0
     total_fillers = 0
     eye_samples = []
+    attention_samples = []
+    engagement_samples = []
+    emotion_counts = {}
     answered_count = 0
 
     for q in questions:
@@ -136,6 +139,8 @@ def evaluate_completed_interview(session):
                 wpm_samples += 1
             total_fillers += ans.filler_words_count
 
+            grammar_val = float(ans.grammar_score or 0.0)
+            pron_val = float(ans.pronunciation_score or 0.0)
             if is_code_heavy:
                 comm_q = 80.0 + min(words_len * 0.25, 12.0) + (4.0 if _has_structured_code(code) else 0.0)
             else:
@@ -144,12 +149,23 @@ def evaluate_completed_interview(session):
                     comm_q -= 10.0
                 if ans.filler_words_count > 2:
                     comm_q -= min((ans.filler_words_count - 2) * 3.0, 18.0)
+                if grammar_val > 0 and pron_val > 0:
+                    comm_q = (comm_q * 0.6) + (grammar_val * 0.2) + (pron_val * 0.2)
             comm_q = round(min(max(comm_q, 35.0), 97.0), 1)
 
             # Camera-optional fairness: never penalize candidates when camera is off
             if session.camera_enabled and ans.eye_contact_percentage > 0:
                 eye_samples.append(ans.eye_contact_percentage)
-                conf_q = round(min(max((ans.eye_contact_percentage * 0.6) + (comm_q * 0.4), 40.0), 97.0), 1)
+                attn_v = float(ans.attention_score or ans.eye_contact_percentage)
+                eng_v = float(ans.engagement_score or ans.eye_contact_percentage)
+                attention_samples.append(attn_v)
+                engagement_samples.append(eng_v)
+                dom_emo = (ans.dominant_emotion or 'Neutral').strip()
+                emotion_counts[dom_emo] = emotion_counts.get(dom_emo, 0) + 1
+                conf_q = round(
+                    min(max((ans.eye_contact_percentage * 0.35) + (attn_v * 0.15) + (eng_v * 0.15) + (comm_q * 0.35), 40.0), 97.0),
+                    1,
+                )
             else:
                 hesitation_penalty = min(ans.filler_words_count * 3.5, 20.0)
                 conf_q = round(min(max(86.0 - hesitation_penalty + min(words_len * 0.15, 8.0), 45.0), 95.0), 1)
@@ -165,6 +181,13 @@ def evaluate_completed_interview(session):
             accum_tech.append(tech_q)
             accum_prof.append(prof_q)
 
+            media_url = ''
+            if getattr(ans, 'media_recording', None):
+                try:
+                    media_url = ans.media_recording.url
+                except Exception:
+                    media_url = ''
+
             question_evaluations.append({
                 'order': q.order,
                 'competency': q.competency,
@@ -176,6 +199,13 @@ def evaluate_completed_interview(session):
                 'improvements': improvements_text,
                 'wpm': 0 if is_code_heavy else ans.wpm,
                 'filler_words_count': ans.filler_words_count,
+                'grammar_score': round(grammar_val, 1),
+                'pronunciation_score': round(pron_val, 1),
+                'eye_contact_percentage': round(float(ans.eye_contact_percentage or 0.0), 1),
+                'attention_score': round(float(ans.attention_score or 0.0), 1),
+                'engagement_score': round(float(ans.engagement_score or 0.0), 1),
+                'dominant_emotion': ans.dominant_emotion or 'Neutral',
+                'media_recording_url': media_url,
                 'score': round((tech_q + comm_q) / 2, 1),
             })
         else:

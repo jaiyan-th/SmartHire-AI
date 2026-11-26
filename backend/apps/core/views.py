@@ -1,9 +1,13 @@
+from datetime import timedelta
 import os
 import time
+from django.conf import settings
+from django.core.mail import send_mail
 from django.db import connection
+from django.utils import timezone
 from rest_framework import views, status, response, permissions
 from integrations.ai.provider import AIProviderService
-from .models import MentorChatMessage, PlatformConfig
+from .models import MentorChatMessage, Notification, PlatformConfig
 
 APP_START_MONOTONIC = time.monotonic()
 
@@ -285,3 +289,88 @@ class MentorChatView(views.APIView):
             'context_summary': summary,
             'suggested_prompts': suggestions,
         }, status=status.HTTP_200_OK)
+
+
+def create_user_notification(user, title: str, message: str, category: str = 'alert', link: str = '', send_email: bool = False):
+    """Creates an in-app Notification record and optionally sends an email reminder/alert."""
+    if not user:
+        return None
+    notif = Notification.objects.create(
+        user=user,
+        title=title[:160],
+        message=message,
+        category=category[:30],
+        link=link[:255],
+    )
+    if send_email and getattr(user, 'email', ''):
+        try:
+            send_mail(
+                subject=f"[SmartHire AI] {title}",
+                message=message,
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@smarthire.local'),
+                recipient_list=[user.email],
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+    return notif
+
+
+class NotificationListView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @staticmethod
+    def _serialize(n: Notification) -> dict:
+        return {
+            'id': str(n.id),
+            'title': n.title,
+            'message': n.message,
+            'category': n.category,
+            'link': n.link,
+            'is_read': n.is_read,
+            'created_at': n.created_at.isoformat(),
+        }
+
+    def get(self, request):
+        from apps.interviews.models import InterviewSession, InterviewStatus
+
+        # Generate proactive due-soon interview deadline reminders (once per session within 48h window)
+        now = timezone.now()
+        due_soon = InterviewSession.objects.filter(
+            candidate=request.user,
+            status__in=[InterviewStatus.READY, InterviewStatus.IN_PROGRESS],
+            deadline__isnull=False,
+            deadline__gte=now,
+            deadline__lte=now + timedelta(hours=48),
+        )
+        for sess in due_soon:
+            link = f'/interview/room/{sess.id}'
+            if not Notification.objects.filter(user=request.user, category='reminder', link=link).exists():
+                hrs = max(1, int((sess.deadline - now).total_seconds() // 3600))
+                create_user_notification(
+                    user=request.user,
+                    title=f'Interview deadline in ~{hrs}h',
+                    message=f'Your {sess.domain} ({sess.difficulty}) assessment is due by {sess.deadline.strftime("%b %d, %H:%M UTC")}.',
+                    category='reminder',
+                    link=link,
+                )
+
+        items = list(Notification.objects.filter(user=request.user)[:30])
+        unread = Notification.objects.filter(user=request.user, is_read=False).count()
+        return response.Response({
+            'notifications': [self._serialize(n) for n in items],
+            'unread_count': unread,
+        })
+
+    def patch(self, request):
+        notif_id = str(request.data.get('id') or '').strip()
+        if notif_id:
+            Notification.objects.filter(user=request.user, id=notif_id).update(is_read=True)
+        else:
+            Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        unread = Notification.objects.filter(user=request.user, is_read=False).count()
+        return response.Response({'unread_count': unread}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        Notification.objects.filter(user=request.user, is_read=True).delete()
+        return response.Response({'message': 'Read notifications cleared.'}, status=status.HTTP_200_OK)

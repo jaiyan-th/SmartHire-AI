@@ -21,6 +21,7 @@ import StudioAIOrb, { type OrbState } from '@/components/visuals/StudioAIOrb';
 import { useToast } from '@/context/ToastContext';
 import { api } from '@/lib/api';
 import { formatDurationSeconds } from '@/lib/cn';
+import { LiveVisionTracker, type VisionTelemetrySample } from '@/lib/visionBehavior';
 import type { InterviewAnswer, InterviewSession } from '@/lib/types';
 import { MOTION_EASE, SPRING_SNAPPY } from '@/motion/system';
 
@@ -61,6 +62,8 @@ export default function InterviewStudioPage() {
   const [transcriptOpen, setTranscriptOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [liveVision, setLiveVision] = useState<VisionTelemetrySample | null>(null);
 
   const questionStartRef = useRef<number>(Date.now());
   const tabSwitchesRef = useRef<number>(0);
@@ -69,6 +72,9 @@ export default function InterviewStudioPage() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRafRef = useRef<number>(0);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const visionTrackerRef = useRef<LiveVisionTracker | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
 
   const resolvedSessionId = paramSessionId || sessionStorage.getItem('active_interview_session_id');
@@ -81,6 +87,14 @@ export default function InterviewStudioPage() {
       // ignore
     }
     recognitionRef.current = null;
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    } catch {
+      // ignore
+    }
+    mediaRecorderRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
@@ -194,11 +208,57 @@ export default function InterviewStudioPage() {
   useEffect(() => {
     if (!currentQuestion) return;
     questionStartRef.current = Date.now();
+    recordedChunksRef.current = [];
+    visionTrackerRef.current?.reset();
+    setLiveVision(null);
     const saved = answersMap[currentQuestion.id];
     setTranscript(saved?.transcript_text || '');
     setCodeText(saved?.code_text || '');
     if (saved?.language) setLanguage(saved.language);
   }, [currentQuestion?.id]);
+
+  // Real-time 1Hz Computer Vision webcam analysis (eye-contact, attention, engagement, expression)
+  useEffect(() => {
+    if (!session || !cameraOn) {
+      setLiveVision(null);
+      return;
+    }
+    if (!visionTrackerRef.current) {
+      visionTrackerRef.current = new LiveVisionTracker();
+    }
+    const timer = window.setInterval(() => {
+      visionTrackerRef.current?.analyzeFrame(videoRef.current).then((sample) => {
+        if (sample) setLiveVision(sample);
+      });
+    }, 950);
+    return () => window.clearInterval(timer);
+  }, [session?.id, cameraOn]);
+
+  const stopAndCollectClip = useCallback((): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const rec = mediaRecorderRef.current;
+      if (!rec || rec.state === 'inactive') {
+        if (recordedChunksRef.current.length > 0) {
+          const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+          recordedChunksRef.current = [];
+          resolve(blob.size > 512 ? blob : null);
+        } else {
+          resolve(null);
+        }
+        return;
+      }
+      rec.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: rec.mimeType || 'video/webm' });
+        recordedChunksRef.current = [];
+        resolve(blob.size > 512 ? blob : null);
+      };
+      try {
+        rec.stop();
+      } catch {
+        resolve(null);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' });
@@ -230,6 +290,8 @@ export default function InterviewStudioPage() {
     try {
       if (currentQuestion) {
         const dur = Math.max(5, Math.round((Date.now() - questionStartRef.current) / 1000));
+        const visionSummary = cameraOn ? visionTrackerRef.current?.getSummary() : null;
+        const mediaClip = session.recording_consent ? await stopAndCollectClip() : null;
         await api.submitAnswer({
           session_id: session.id,
           question_id: currentQuestion.id,
@@ -238,7 +300,11 @@ export default function InterviewStudioPage() {
           transcript_text: transcript.trim(),
           code_text: codeText.trim(),
           duration_seconds: dur,
-          eye_contact_percentage: cameraOn ? 90 : 0,
+          eye_contact_percentage: visionSummary?.eyeContactPct ?? 0,
+          attention_score: visionSummary?.attentionScore ?? 0,
+          engagement_score: visionSummary?.engagementScore ?? 0,
+          dominant_emotion: visionSummary?.dominantEmotion || (cameraOn ? 'Focused' : 'Neutral'),
+          media_recording: mediaClip,
           next_question_index: questionIdx,
         });
       }
@@ -282,13 +348,66 @@ export default function InterviewStudioPage() {
     return { words: words.length, wpm, fillers };
   }, [transcript]);
 
+  const handleWhisperTranscribe = async () => {
+    const clip = await stopAndCollectClip();
+    if (!clip) {
+      toast('Record audio using Speak first, then transcribe with Whisper.', 'info');
+      return;
+    }
+    setTranscribing(true);
+    try {
+      const res = await api.transcribeAudio(clip);
+      if (res.transcript) {
+        setTranscript((prev) => (prev ? `${prev.trim()} ${res.transcript}` : res.transcript));
+        toast(`Transcribed via ${res.provider}`, 'success');
+      } else {
+        toast(res.error || 'No speech recognized in audio clip.', 'info');
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Whisper transcription failed.', 'error');
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
   const toggleMic = () => {
+    const startMediaRecorder = () => {
+      if (!session?.recording_consent || !streamRef.current || typeof MediaRecorder === 'undefined') return;
+      try {
+        recordedChunksRef.current = [];
+        const mime = MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : MediaRecorder.isTypeSupported('audio/webm')
+            ? 'audio/webm'
+            : '';
+        const recorder = mime
+          ? new MediaRecorder(streamRef.current, { mimeType: mime })
+          : new MediaRecorder(streamRef.current);
+        recorder.ondataavailable = (ev) => {
+          if (ev.data && ev.data.size > 0) recordedChunksRef.current.push(ev.data);
+        };
+        recorder.start(1000);
+        mediaRecorderRef.current = recorder;
+      } catch {
+        // ignore unsupported browser codec
+      }
+    };
+
     const SpeechRec =
       (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionInstance }).SpeechRecognition ||
       (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).webkitSpeechRecognition;
 
     if (!SpeechRec) {
-      toast('Live Web Speech API unavailable in this browser. Type your response directly.', 'info');
+      if (isRecording) {
+        mediaRecorderRef.current?.stop();
+        setIsRecording(false);
+        setOrbState('idle');
+      } else {
+        startMediaRecorder();
+        setIsRecording(true);
+        setOrbState('listening');
+        toast('Recording audio for Whisper STT & playback. Click Mute then Whisper STT or Next Question.', 'info');
+      }
       setTranscriptOpen(true);
       return;
     }
@@ -304,6 +423,7 @@ export default function InterviewStudioPage() {
       return;
     }
 
+    startMediaRecorder();
     const rec = new SpeechRec();
     rec.continuous = true;
     rec.interimResults = true;
@@ -356,6 +476,8 @@ export default function InterviewStudioPage() {
     setOrbState('thinking');
     try {
       const dur = Math.max(5, Math.round((Date.now() - questionStartRef.current) / 1000));
+      const visionSummary = cameraOn ? visionTrackerRef.current?.getSummary() : null;
+      const mediaClip = session.recording_consent ? await stopAndCollectClip() : null;
       const res = await api.submitAnswer({
         session_id: session.id,
         question_id: currentQuestion.id,
@@ -364,7 +486,11 @@ export default function InterviewStudioPage() {
         transcript_text: transcript.trim(),
         code_text: codeText.trim(),
         duration_seconds: dur,
-        eye_contact_percentage: cameraOn ? 90 : 0,
+        eye_contact_percentage: visionSummary?.eyeContactPct ?? 0,
+        attention_score: visionSummary?.attentionScore ?? 0,
+        engagement_score: visionSummary?.engagementScore ?? 0,
+        dominant_emotion: visionSummary?.dominantEmotion || (cameraOn ? 'Focused' : 'Neutral'),
+        media_recording: mediaClip,
         next_question_index: targetIdx,
       });
       setAnswersMap((prev) => ({ ...prev, [currentQuestion.id]: res.answer }));
@@ -551,7 +677,7 @@ export default function InterviewStudioPage() {
             <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
               <span className="inline-flex items-center gap-2 rounded-lg bg-black/75 px-2.5 py-1 font-mono text-[11px] text-[#F5F5F4]">
                 {isRecording && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
-                {isRecording ? 'RECORDING' : cameraOn ? 'LOCAL CAM' : 'AUDIO / TEXT'}
+                {isRecording ? 'RECORDING' : cameraOn ? 'VISION ACTIVE' : 'AUDIO / TEXT'}
               </span>
               <button
                 type="button"
@@ -562,6 +688,18 @@ export default function InterviewStudioPage() {
                 {webcamExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </button>
             </div>
+
+            {cameraOn && liveVision && (
+              <div
+                data-testid="live-vision-hud"
+                className="absolute bottom-2.5 left-2.5 right-2.5 rounded-lg bg-black/80 backdrop-blur-sm border border-[#2A2A2A] px-3 py-1.5 flex items-center justify-between gap-2 font-mono text-[10px] text-[#F5F5F4]"
+              >
+                <span>Gaze {liveVision.eyeContactPct}%</span>
+                <span>Attn {liveVision.attentionScore}%</span>
+                <span>Eng {liveVision.engagementScore}%</span>
+                <span className="text-[#C9F45B]">{liveVision.emotion}</span>
+              </div>
+            )}
           </motion.div>
 
           <AnimatePresence initial={false}>
@@ -575,7 +713,17 @@ export default function InterviewStudioPage() {
               >
                 <div className="px-5 py-3 border-b border-[#242424] flex items-center justify-between text-xs">
                   <span className="font-mono text-[#A3A3A0]">LIVE TRANSCRIPT</span>
-                  <span className="text-[#737370]">Editable for accessibility</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleWhisperTranscribe}
+                      disabled={transcribing}
+                      className="font-mono text-[10px] px-2 py-0.5 rounded bg-[#1A1A1A] border border-[#2A2A2A] text-[#C9F45B] hover:border-[#C9F45B]/60 disabled:opacity-50"
+                    >
+                      {transcribing ? 'Transcribing…' : 'Whisper STT'}
+                    </button>
+                    <span className="text-[#737370]">Editable</span>
+                  </div>
                 </div>
                 <div className="p-5 space-y-3">
                   <div className="text-xs text-[#A3A3A0] leading-relaxed">

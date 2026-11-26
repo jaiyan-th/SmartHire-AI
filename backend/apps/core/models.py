@@ -77,3 +77,17 @@ class MentorChatMessage(models.Model):
 
     class Meta:
         ordering = ['created_at']
+
+
+class Notification(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=160)
+    message = models.TextField()
+    category = models.CharField(max_length=30, default='alert')  # reminder, assignment, evaluation, alert
+    link = models.CharField(max_length=255, blank=True, default='')
+    is_read = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
