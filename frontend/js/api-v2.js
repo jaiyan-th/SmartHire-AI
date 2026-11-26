@@ -4,7 +4,7 @@
  */
 
 const USE_REAL_BACKEND = true;
-const BASE_URL = window.SMARTHIRE_API_BASE || 'http://127.0.0.1:8000';
+const BASE_URL = window.SMARTHIRE_API_BASE || (window.location.port === '8000' ? '' : 'http://127.0.0.1:8000');
 
 class SmartHireAPI {
   constructor() {
