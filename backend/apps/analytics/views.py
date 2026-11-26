@@ -1,10 +1,12 @@
 import re
 import uuid
+from django.core.cache import cache
 from django.db.models import Q
 from rest_framework import views, status, response, permissions
 from apps.evaluations.models import Evaluation
 from apps.interviews.models import InterviewSession, RoadmapMilestone
 from apps.resumes.models import Resume
+from integrations.ai.provider import AIProviderService
 
 
 class InsightsAnalyticsView(views.APIView):
@@ -227,6 +229,20 @@ class SkillGapView(views.APIView):
                 {'skill': 'Technical & API Fluency', 'required': 75, 'candidate': _skill_score(['rest api', 'llm', 'system design'])},
                 {'skill': 'Executive Communication & Alignment', 'required': 85, 'candidate': comm_score},
             ]
+        elif any(k in role_lower for k in ['frontend', 'front-end', 'ui', 'react']):
+            role_comparison = [
+                {'skill': 'React / TypeScript Component Architecture', 'required': 85, 'candidate': _skill_score(['react', 'typescript', 'javascript', 'next.js'])},
+                {'skill': 'UI Styling, Accessibility & Responsive Design', 'required': 80, 'candidate': _skill_score(['tailwind css', 'html5', 'css3'])},
+                {'skill': 'API Integration & Client State Performance', 'required': 78, 'candidate': _skill_score(['rest api', 'graphql', 'jest'])},
+                {'skill': 'Verbal Communication & Architecture Framing', 'required': 80, 'candidate': comm_score},
+            ]
+        elif any(k in role_lower for k in ['security', 'cyber', 'appsec']):
+            role_comparison = [
+                {'skill': 'Application & Auth Security (OAuth2/JWT)', 'required': 85, 'candidate': _skill_score(['cybersecurity', 'oauth2', 'jwt'])},
+                {'skill': 'Infrastructure & Container Hardening', 'required': 82, 'candidate': _skill_score(['linux', 'docker', 'aws', 'ci/cd'])},
+                {'skill': 'Secure API & Python/Scripting', 'required': 78, 'candidate': _skill_score(['python', 'rest api', 'git'])},
+                {'skill': 'Incident Communication & Threat Modeling', 'required': 80, 'candidate': comm_score},
+            ]
         else:
             role_comparison = [
                 {'skill': 'Python & Core Programming', 'required': 85, 'candidate': _skill_score(['python', 'java', 'c++', 'typescript'])},
@@ -316,6 +332,42 @@ class SkillGapView(views.APIView):
                 ],
             },
         ]
+
+        cache_key = f"growth_plan:{request.user.id}:{latest_resume.id if latest_resume else 'none'}:{latest_eval.id if latest_eval else 'none'}:{role_lower}"
+        ai_plan = cache.get(cache_key)
+        if ai_plan is None:
+            ai_plan = AIProviderService(user_email=request.user.email).generate_growth_roadmap({
+                'target_role': target_role,
+                'has_resume': has_resume,
+                'ats_score': latest_resume.ats_score if latest_resume else None,
+                'extracted_skills': extracted_flat[:20],
+                'missing_skills': missing_list[:8],
+                'has_evaluation': has_eval,
+                'overall_score': latest_eval.overall_score if latest_eval else None,
+                'weaknesses': list(latest_eval.weaknesses or [])[:4] if latest_eval else [],
+            })
+            if ai_plan:
+                cache.set(cache_key, ai_plan, timeout=600)
+
+        if ai_plan and ai_plan.get('weak_areas'):
+            weak_areas = ai_plan['weak_areas'][:4]
+
+        if ai_plan and len(ai_plan.get('roadmap') or []) == 4:
+            roadmap_def = []
+            for w_idx, week_obj in enumerate(ai_plan['roadmap'], start=1):
+                tasks = [
+                    {'key': f'w{w_idx}_m{m_idx}', 'task': str(task_text)}
+                    for m_idx, task_text in enumerate(week_obj.get('milestones', [])[:3], start=1)
+                    if str(task_text).strip()
+                ]
+                if not tasks:
+                    tasks = [{'key': f'w{w_idx}_m1', 'task': f'Complete hands-on practice for {week_obj.get("focus", target_role)}'}]
+                roadmap_def.append({
+                    'week': week_obj.get('week') or f'Week {w_idx}',
+                    'focus': week_obj.get('focus') or target_role,
+                    'milestones': tasks,
+                    'resources': [],
+                })
 
         for week in roadmap_def:
             for m in week['milestones']:

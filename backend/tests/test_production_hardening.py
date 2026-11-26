@@ -300,3 +300,63 @@ class ProductionHardeningTests(TestCase):
         self.assertEqual(cleared.status_code, status.HTTP_200_OK)
         hist_after = self.client_cand.get('/api/core/assistant/chat')
         self.assertEqual(len(hist_after.data['messages']), 0)
+
+    def test_groq_only_integration_pipeline_and_synonym_parsing(self):
+        import json
+        import os
+        from unittest.mock import patch, MagicMock
+        from apps.resumes.utils import analyze_resume_text
+        from integrations.ai.provider import AIProviderService
+
+        # Inline section + skill synonym detection offline
+        offline_res = analyze_resume_text(
+            'Skills: Postgres, K8s, ReactJS, Fast API. Education: B.Tech CS. Experience: Backend Engineer Intern at Acme.',
+            target_role='Full Stack Software Engineer',
+        )
+        flat_offline = {s for sub in offline_res['skills_extracted'].values() for s in sub}
+        self.assertIn('PostgreSQL', flat_offline)
+        self.assertIn('Kubernetes', flat_offline)
+        self.assertIn('React', flat_offline)
+        self.assertIn('FastAPI', flat_offline)
+        self.assertTrue(len(offline_res['experience']) >= 1)
+        self.assertTrue(len(offline_res['education']) >= 1)
+
+        # Mock Groq HTTP responses when ONLY GROQ_API_KEY is configured
+        def fake_post(url, headers=None, json=None, timeout=None):
+            resp = MagicMock()
+            resp.status_code = 200
+            self.assertIn('api.groq.com', url)
+            self.assertEqual(headers['Authorization'], 'Bearer gsk_test_only_groq')
+            model = json['model']
+            self.assertEqual(model, 'llama-3.3-70b-versatile')
+            content = "```json\n" + (
+                '{"ats_score": 88, "executive_summary": "Strong backend and cloud fundamentals.", '
+                '"skills_extracted": {"languages": ["Python"], "frameworks": ["FastAPI", "React"], '
+                '"databases": ["PostgreSQL"], "tools": ["Kubernetes"], "concepts": ["System Design"]}, '
+                '"missing_skills": ["Terraform"], "experience": ["Backend Engineer Intern at Acme"], '
+                '"education": ["B.Tech CS"], "projects": [], "certifications": []}'
+            ) + "\n```" if json.get('response_format') else "Focus on Terraform Infrastructure as Code labs next."
+            resp.json.return_value = {
+                'choices': [{'message': {'content': content}}],
+                'usage': {'prompt_tokens': 120, 'completion_tokens': 80},
+            }
+            return resp
+
+        with patch.dict(os.environ, {'GROQ_API_KEY': 'gsk_test_only_groq', 'OPENAI_API_KEY': '', 'GEMINI_API_KEY': ''}, clear=False):
+            with patch('integrations.ai.provider.requests.post', side_effect=fake_post):
+                llm_parsed = analyze_resume_text(
+                    'Skills: Postgres, K8s, Python. Education: B.Tech CS. Experience: Backend Engineer Intern at Acme.',
+                    target_role='Cloud Platform Engineer',
+                    user_email='prod_cand@demo.com',
+                )
+                self.assertGreaterEqual(llm_parsed['ats_score'], 70)
+                self.assertIn('Terraform', llm_parsed['missing_skills'])
+                self.assertIn('Strong backend', llm_parsed['executive_summary'])
+
+                mentor_reply = AIProviderService(user_email='prod_cand@demo.com').mentor_chat(
+                    user_context={'first_name': 'Prod', 'target_role': 'Cloud Platform Engineer'},
+                    question='What should I learn next?',
+                    recent_history=[],
+                )
+                self.assertIn('Terraform', mentor_reply['reply'])
+                self.assertTrue(mentor_reply['provider'].startswith('groq:'))

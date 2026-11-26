@@ -20,6 +20,7 @@ def process_resume_task(self, resume_id: str, job_description: str = ''):
             resume.raw_text,
             target_role=resume.target_role,
             job_description=job_description,
+            user_email=resume.user.email,
         )
 
         resume.ats_score = analysis['ats_score']

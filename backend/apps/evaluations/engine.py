@@ -243,6 +243,39 @@ def evaluate_completed_interview(session):
     ]
     practice_recommendations.append("Compare each submitted response against the reference model answers in the breakdown below.")
 
+    if answered_count > 0:
+        ai_summary = ai_service.synthesize_interview_feedback({
+            'domain': session.domain,
+            'category': session.category,
+            'difficulty': session.difficulty,
+            'overall_score': overall_score,
+            'technical_score': base_tech,
+            'communication_score': base_comm,
+            'confidence_score': base_conf,
+            'professionalism_score': base_prof,
+            'avg_wpm': avg_wpm,
+            'total_fillers': total_fillers,
+            'answered_count': answered_count,
+            'total_questions': len(questions),
+            'questions_breakdown': [
+                {
+                    'competency': qe['competency'],
+                    'score': qe['score'],
+                    'critique': qe['critique'],
+                }
+                for qe in question_evaluations
+            ],
+        })
+        if ai_summary:
+            if ai_summary.get('strengths'):
+                strengths = ai_summary['strengths'][:4]
+            if ai_summary.get('weaknesses'):
+                weaknesses = ai_summary['weaknesses'][:4]
+            if ai_summary.get('improvement_suggestions'):
+                improvement_suggestions = ai_summary['improvement_suggestions'][:4]
+            if ai_summary.get('practice_recommendations'):
+                practice_recommendations = ai_summary['practice_recommendations'][:3]
+
     learning_resources = DOMAIN_RESOURCES.get(session.domain, DOMAIN_RESOURCES['Software Engineering'])
 
     evaluation, _ = Evaluation.objects.update_or_create(

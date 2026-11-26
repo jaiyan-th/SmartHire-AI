@@ -313,8 +313,9 @@ export default function AdminPage() {
                 onChange={(e) => setLlmBackend(e.target.value)}
                 className="w-full h-11 rounded-xl border border-border bg-canvas px-4 text-sm"
               >
-                <option value="Google Gemini 2.0 Flash">Google Gemini 2.0 Flash</option>
+                <option value="Groq Llama-3.3-70B-Versatile">Groq Llama-3.3-70B-Versatile</option>
                 <option value="Groq Llama-3.1-8B-Instant">Groq Llama-3.1-8B-Instant</option>
+                <option value="Google Gemini 2.0 Flash">Google Gemini 2.0 Flash</option>
                 <option value="OpenAI GPT-4o-mini">OpenAI GPT-4o-mini</option>
                 <option value="Local Ollama Llama-3">Local Ollama Llama-3</option>
               </select>

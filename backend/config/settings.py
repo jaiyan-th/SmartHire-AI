@@ -5,7 +5,8 @@ import dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables
+# Load environment variables from either backend/.env or project-root .env
+dotenv.load_dotenv(BASE_DIR / '.env')
 dotenv.load_dotenv(BASE_DIR.parent / '.env')
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'smarthire-ai-dev-key-override-in-prod-2026-x9k2')

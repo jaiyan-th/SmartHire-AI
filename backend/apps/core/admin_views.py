@@ -253,8 +253,9 @@ class AdminSettingsView(views.APIView):
             'daily_token_budget': config.daily_token_budget,
             'maintenance_mode': config.maintenance_mode,
             'available_backends': [
-                'Google Gemini 2.0 Flash',
+                'Groq Llama-3.3-70B-Versatile',
                 'Groq Llama-3.1-8B-Instant',
+                'Google Gemini 2.0 Flash',
                 'OpenAI GPT-4o-mini',
                 'Local Ollama Llama-3',
             ],
