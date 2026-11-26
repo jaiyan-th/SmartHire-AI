@@ -89,8 +89,8 @@ def sanitize_untrusted_text(text: str, max_length: int = 8000) -> str:
 
 
 def _extract_json_str(raw: str) -> str:
-    """Strips markdown code fences or leading prose if an LLM wraps JSON output."""
-    text = (raw or '').strip()
+    """Strips thinking tags, markdown code fences, or leading prose around JSON output."""
+    text = re.sub(r'<think>[\s\S]*?</think>', '', raw or '', flags=re.IGNORECASE).strip()
     if text.startswith('```'):
         text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.IGNORECASE)
         text = re.sub(r'\s*```$', '', text)
@@ -100,6 +100,22 @@ def _extract_json_str(raw: str) -> str:
         if start != -1 and end > start:
             text = text[start : end + 1]
     return text.strip()
+
+
+def _clean_text_reply(raw: str) -> str:
+    """Removes hidden chain-of-thought <think> tags from reasoning models before returning text."""
+    return re.sub(r'<think>[\s\S]*?</think>', '', raw or '', flags=re.IGNORECASE).strip()
+
+
+_GROQ_PREFERRED_MODELS = [
+    'openai/gpt-oss-120b',
+    'llama-3.3-70b-versatile',
+    'qwen/qwen3.8-27b',
+    'qwen/qwen3-32b',
+    'openai/gpt-oss-20b',
+    'llama-3.1-8b-instant',
+]
+_GROQ_NON_CHAT_TOKENS = ('whisper', 'orpheus', 'guard', 'safeguard', 'tts', 'embed')
 
 
 class AIProviderService:
@@ -162,20 +178,66 @@ class AIProviderService:
         headers = {'Content-Type': 'application/json'}
         candidates: List[Tuple[str, str, dict, str]] = []
 
+        def _discover_groq_models() -> List[str]:
+            env_model = os.getenv('GROQ_MODEL_NAME', '').strip()
+            fallback_list = []
+            if env_model:
+                fallback_list.append(env_model)
+            for m in _GROQ_PREFERRED_MODELS:
+                if m not in fallback_list:
+                    fallback_list.append(m)
+
+            try:
+                from django.core.cache import cache
+                cache_key = f'groq_chat_models:{hash(self.groq_key)}'
+                cached = cache.get(cache_key)
+            except Exception:
+                cache = None
+                cache_key = ''
+                cached = None
+
+            if isinstance(cached, list) and cached:
+                available = cached
+            else:
+                available = []
+                try:
+                    r = requests.get(
+                        'https://api.groq.com/openai/v1/models',
+                        headers={'Authorization': f'Bearer {self.groq_key}'},
+                        timeout=6,
+                    )
+                    if r.ok:
+                        raw_ids = [item.get('id', '') for item in r.json().get('data', []) if item.get('id')]
+                        available = [
+                            mid for mid in raw_ids
+                            if not any(tok in mid.lower() for tok in _GROQ_NON_CHAT_TOKENS)
+                        ]
+                        if cache and available:
+                            cache.set(cache_key, available, timeout=300)
+                except Exception:
+                    available = []
+
+            if not available:
+                return fallback_list
+
+            ordered = []
+            if env_model and env_model in available:
+                ordered.append(env_model)
+            for pref in _GROQ_PREFERRED_MODELS:
+                if pref in available and pref not in ordered:
+                    ordered.append(pref)
+            for extra in available:
+                if extra not in ordered:
+                    ordered.append(extra)
+            return ordered[:4]
+
         def add_groq():
             if not self.groq_key:
                 return
             h = {**headers, 'Authorization': f'Bearer {self.groq_key}'}
             url = 'https://api.groq.com/openai/v1/chat/completions'
-            env_model = os.getenv('GROQ_MODEL_NAME', '').strip()
-            if env_model:
-                candidates.append(('groq', url, h, env_model))
-            elif '8B' in backend_pref:
-                candidates.append(('groq', url, h, 'llama-3.1-8b-instant'))
-                candidates.append(('groq', url, h, 'llama-3.3-70b-versatile'))
-            else:
-                candidates.append(('groq', url, h, 'llama-3.3-70b-versatile'))
-                candidates.append(('groq', url, h, 'llama-3.1-8b-instant'))
+            for model_id in _discover_groq_models():
+                candidates.append(('groq', url, h, model_id))
 
         def add_gemini():
             if not self.gemini_key:
@@ -438,8 +500,9 @@ class AIProviderService:
             json_mode=False,
             messages_override=messages,
         )
-        if raw and raw.strip():
-            return {'reply': raw.strip(), 'provider': f'{provider}:{model}'}
+        cleaned = _clean_text_reply(raw) if raw else ''
+        if cleaned:
+            return {'reply': cleaned, 'provider': f'{provider}:{model}'}
 
         return {
             'reply': self._build_personalized_fallback_reply(user_context, safe_q),

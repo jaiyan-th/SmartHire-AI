@@ -313,6 +313,7 @@ export default function AdminPage() {
                 onChange={(e) => setLlmBackend(e.target.value)}
                 className="w-full h-11 rounded-xl border border-border bg-canvas px-4 text-sm"
               >
+                <option value="Groq Auto (Best Available)">Groq Auto (Best Available)</option>
                 <option value="Groq Llama-3.3-70B-Versatile">Groq Llama-3.3-70B-Versatile</option>
                 <option value="Groq Llama-3.1-8B-Instant">Groq Llama-3.1-8B-Instant</option>
                 <option value="Google Gemini 2.0 Flash">Google Gemini 2.0 Flash</option>

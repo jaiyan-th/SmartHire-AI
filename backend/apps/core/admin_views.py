@@ -253,6 +253,7 @@ class AdminSettingsView(views.APIView):
             'daily_token_budget': config.daily_token_budget,
             'maintenance_mode': config.maintenance_mode,
             'available_backends': [
+                'Groq Auto (Best Available)',
                 'Groq Llama-3.3-70B-Versatile',
                 'Groq Llama-3.1-8B-Instant',
                 'Google Gemini 2.0 Flash',

@@ -328,7 +328,7 @@ class ProductionHardeningTests(TestCase):
             self.assertIn('api.groq.com', url)
             self.assertEqual(headers['Authorization'], 'Bearer gsk_test_only_groq')
             model = json['model']
-            self.assertEqual(model, 'llama-3.3-70b-versatile')
+            self.assertIn(model, ('openai/gpt-oss-120b', 'llama-3.3-70b-versatile'))
             content = "```json\n" + (
                 '{"ats_score": 88, "executive_summary": "Strong backend and cloud fundamentals.", '
                 '"skills_extracted": {"languages": ["Python"], "frameworks": ["FastAPI", "React"], '
@@ -342,21 +342,26 @@ class ProductionHardeningTests(TestCase):
             }
             return resp
 
-        with patch.dict(os.environ, {'GROQ_API_KEY': 'gsk_test_only_groq', 'OPENAI_API_KEY': '', 'GEMINI_API_KEY': ''}, clear=False):
-            with patch('integrations.ai.provider.requests.post', side_effect=fake_post):
-                llm_parsed = analyze_resume_text(
-                    'Skills: Postgres, K8s, Python. Education: B.Tech CS. Experience: Backend Engineer Intern at Acme.',
-                    target_role='Cloud Platform Engineer',
-                    user_email='prod_cand@demo.com',
-                )
-                self.assertGreaterEqual(llm_parsed['ats_score'], 70)
-                self.assertIn('Terraform', llm_parsed['missing_skills'])
-                self.assertIn('Strong backend', llm_parsed['executive_summary'])
+        fake_models_resp = MagicMock()
+        fake_models_resp.ok = True
+        fake_models_resp.json.return_value = {'data': [{'id': 'openai/gpt-oss-120b'}, {'id': 'llama-3.3-70b-versatile'}]}
 
-                mentor_reply = AIProviderService(user_email='prod_cand@demo.com').mentor_chat(
-                    user_context={'first_name': 'Prod', 'target_role': 'Cloud Platform Engineer'},
-                    question='What should I learn next?',
-                    recent_history=[],
-                )
-                self.assertIn('Terraform', mentor_reply['reply'])
-                self.assertTrue(mentor_reply['provider'].startswith('groq:'))
+        with patch.dict(os.environ, {'GROQ_API_KEY': 'gsk_test_only_groq', 'GROQ_MODEL_NAME': '', 'OPENAI_API_KEY': '', 'GEMINI_API_KEY': ''}, clear=False):
+            with patch('integrations.ai.provider.requests.get', return_value=fake_models_resp):
+                with patch('integrations.ai.provider.requests.post', side_effect=fake_post):
+                    llm_parsed = analyze_resume_text(
+                        'Skills: Postgres, K8s, Python. Education: B.Tech CS. Experience: Backend Engineer Intern at Acme.',
+                        target_role='Cloud Platform Engineer',
+                        user_email='prod_cand@demo.com',
+                    )
+                    self.assertGreaterEqual(llm_parsed['ats_score'], 70)
+                    self.assertIn('Terraform', llm_parsed['missing_skills'])
+                    self.assertIn('Strong backend', llm_parsed['executive_summary'])
+
+                    mentor_reply = AIProviderService(user_email='prod_cand@demo.com').mentor_chat(
+                        user_context={'first_name': 'Prod', 'target_role': 'Cloud Platform Engineer'},
+                        question='What should I learn next?',
+                        recent_history=[],
+                    )
+                    self.assertIn('Terraform', mentor_reply['reply'])
+                    self.assertTrue(mentor_reply['provider'].startswith('groq:'))
