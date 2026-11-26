@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: smarthire-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: smarthire_db
+      POSTGRES_USER: smarthire_user
+      POSTGRES_PASSWORD: smarthire_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smarthire_user -d smarthire_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: smarthire-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: smarthire-backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DJANGO_DEBUG: "False"
+      DJANGO_SECRET_KEY: "smarthire-ai-prod-key-change-in-real-deployment"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,backend"
+      DATABASE_ENGINE: "postgresql"
+      POSTGRES_DB: "smarthire_db"
+      POSTGRES_USER: "smarthire_user"
+      POSTGRES_PASSWORD: "smarthire_secure_password"
+      POSTGRES_HOST: "db"
+      POSTGRES_PORT: "5432"
+      REDIS_URL: "redis://redis:6379/0"
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python backend/manage.py migrate &&
+             python backend/manage.py seed_data &&
+             gunicorn --bind 0.0.0.0:8000 config.wsgi:application --chdir backend --workers 3 --timeout 120"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: smarthire-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "5500:80"
+
+volumes:
+  postgres_data:

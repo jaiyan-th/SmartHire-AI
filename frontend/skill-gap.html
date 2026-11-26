@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartHire AI — Skill Gap & Learning Roadmap</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .gap-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-bottom: 2.5rem;
+    }
+    .skill-bar-row { margin-bottom: 1.15rem; }
+    .skill-bar-label {
+      display: flex; justify-content: space-between; font-size: 0.86rem;
+      font-weight: 600; color: var(--text-heading); margin-bottom: 0.32rem;
+    }
+    .skill-track {
+      width: 100%; height: 10px; background: var(--lavender-100);
+      border-radius: 9999px; overflow: hidden;
+    }
+    .skill-fill {
+      height: 100%; background: var(--gradient-signature);
+      border-radius: 9999px; transition: width 0.8s var(--ease-smooth);
+    }
+    .roadmap-week-card {
+      background: #ffffff; border: 1px solid var(--lavender-200);
+      border-radius: 18px; padding: 1.5rem; margin-bottom: 1.25rem;
+      border-left: 5px solid var(--lavender-600); box-shadow: var(--shadow-sm);
+    }
+    .milestone-item {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.45rem 0; font-size: 0.88rem; color: var(--text-body); cursor: pointer;
+    }
+    .milestone-item input[type="checkbox"] {
+      width: 17px; height: 17px; accent-color: var(--lavender-600); cursor: pointer;
+    }
+    @media (max-width: 900px) {
+      .gap-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aurora-bg">
+    <div class="aurora-blob blob-1"></div>
+    <div class="aurora-blob blob-2"></div>
+    <div class="aurora-blob blob-3"></div>
+  </div>
+
+  <header id="app-nav"></header>
+
+  <main class="container">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <span class="sticker-badge">CAREER READINESS</span>
+        <h1 style="margin-top: 0.5rem;">Skill Gap Matrix & 4-Week Roadmap</h1>
+        <p style="color: var(--text-muted); font-size: 0.98rem;">
+          Targeting: <strong id="gap-target-role">Loading...</strong> (Current Alignment: <strong id="gap-match-pct">—</strong>)
+        </p>
+      </div>
+      <div class="card" style="padding: 0.75rem 1.4rem; display: flex; align-items: center; gap: 1rem;">
+        <div>
+          <span style="font-size: 0.74rem; color: var(--text-muted); font-weight: 700;">ROADMAP PROGRESS</span>
+          <div class="mono" style="font-size: 1.4rem; font-weight: 800; color: var(--lavender-700);" id="overall-roadmap-progress">0%</div>
+        </div>
+        <div style="width: 52px; height: 52px; border-radius: 50%; background: var(--lavender-100); display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">🎯</div>
+      </div>
+    </div>
+
+    <div class="gap-layout">
+      <section class="card">
+        <h3 style="margin-bottom: 1.15rem;">Candidate Mastery vs Target Role Criteria</h3>
+        <div id="skill-bars-container">
+          <div class="skeleton" style="height: 220px;"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3 style="margin-bottom: 1.15rem;">Evidence-Based Weak-Area Diagnosis</h3>
+        <div id="weak-areas-container" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="skeleton" style="height: 220px;"></div>
+        </div>
+      </section>
+    </div>
+
+    <section>
+      <div style="margin-bottom: 1.25rem;">
+        <span class="sticker-badge">PERSISTENT CURRICULUM</span>
+        <h2 style="margin-top: 0.45rem;">Week-by-Week Remediation Roadmap</h2>
+      </div>
+      <div id="roadmap-weeks-container">
+        <div class="skeleton" style="height: 180px;"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/api-v2.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/pages/skill-gap.js"></script>
+</body>
+</html>

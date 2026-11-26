@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartHire AI — Performance Analytics & Insights</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .overall-banner {
+      background: var(--glass-surface); border: 1px solid var(--glass-border);
+      border-radius: 24px; padding: 1.75rem 2rem; display: flex;
+      justify-content: space-between; align-items: center; margin-bottom: 1.75rem;
+      box-shadow: var(--shadow-md); flex-wrap: wrap; gap: 1.25rem;
+    }
+    .pillars-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem; margin-bottom: 2rem;
+    }
+    .pillar-card {
+      background: #ffffff; border: 1px solid var(--lavender-200);
+      border-radius: 20px; padding: 1.4rem; box-shadow: var(--shadow-sm);
+    }
+    .charts-row {
+      display: grid; grid-template-columns: 1.2fr 0.8fr;
+      gap: 1.5rem; margin-bottom: 2rem;
+    }
+    .chart-box {
+      background: #ffffff; border: 1px solid var(--lavender-200);
+      border-radius: 20px; padding: 1.5rem; box-shadow: var(--shadow-sm);
+      overflow-x: auto;
+    }
+    .accordion-item {
+      background: #ffffff; border: 1px solid var(--lavender-200);
+      border-radius: 16px; margin-bottom: 0.75rem; overflow: hidden;
+    }
+    .accordion-header {
+      padding: 1rem 1.4rem; cursor: pointer; display: flex;
+      justify-content: space-between; align-items: center;
+      background: var(--lavender-50); font-weight: 600; font-size: 0.92rem;
+      color: var(--text-heading); gap: 1rem;
+    }
+    .accordion-body {
+      padding: 1.2rem 1.4rem; display: none; font-size: 0.88rem;
+      border-top: 1px solid var(--lavender-100);
+    }
+    .accordion-body.open { display: block; }
+    @media (max-width: 1024px) {
+      .pillars-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .pillars-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aurora-bg">
+    <div class="aurora-blob blob-1"></div>
+    <div class="aurora-blob blob-2"></div>
+    <div class="aurora-blob blob-3"></div>
+  </div>
+
+  <header id="app-nav"></header>
+
+  <main class="container" id="insights-main">
+    <div id="insights-empty-state" class="card empty-state" style="display:none; max-width:600px; margin:2rem auto;">
+      <span class="sticker-badge">NO ASSESSMENTS YET</span>
+      <h2 style="margin-top:0.75rem;">Complete Your First Mock Interview</h2>
+      <p style="color:var(--text-muted); margin-top:0.5rem;">
+        Your analytics dashboard populates automatically from real completed interview evaluations.
+      </p>
+      <a href="interview.html" class="btn btn-primary" style="margin-top:1rem;">Start Mock Interview</a>
+    </div>
+
+    <div id="insights-content" style="display:none;">
+      <div class="overall-banner">
+        <div>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap:wrap;">
+            <span class="sticker-badge">EVIDENCE-BASED ASSESSMENT</span>
+            <span class="sticker-badge pink" id="insights-domain-badge">Software Engineering</span>
+          </div>
+          <h2>Candidate Performance & Insights</h2>
+          <div style="display:flex; gap:0.75rem; align-items:center; margin-top:0.65rem; flex-wrap:wrap;">
+            <label for="session-selector" style="font-size:0.82rem; font-weight:600;">Inspect Session:</label>
+            <select id="session-selector" class="form-select" style="width:auto; padding:0.35rem 0.8rem; font-size:0.82rem;"></select>
+            <button type="button" id="toggle-share-btn" class="btn btn-secondary" style="padding:0.35rem 0.85rem; font-size:0.8rem;">
+              🔒 Private Practice
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 1.25rem; flex-wrap:wrap;">
+          <div style="text-align: right;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted);">OVERALL RATING</span>
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--success-mint);" id="overall-band-text">—</div>
+            <span style="font-size: 0.74rem; color: var(--text-muted);">30% Comm • 25% Conf • 30% Tech • 15% Prof</span>
+          </div>
+          <div style="width: 82px; height: 82px; border-radius: 50%; background: var(--gradient-signature); color: #fff; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 1.45rem; font-weight: 800; box-shadow: 0 4px 18px rgba(139, 124, 246, 0.45);" id="overall-score-display">
+            0
+          </div>
+          <a id="download-dossier-link" href="report-download.html" class="btn btn-primary" style="padding: 0.72rem 1.2rem; font-size: 0.86rem;">
+            📥 Certified Dossier (PDF)
+          </a>
+        </div>
+      </div>
+
+      <section class="pillars-grid">
+        <div class="pillar-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--lavender-700);">TECHNICAL (30%)</span>
+            <span class="mono" style="font-size: 1.25rem; font-weight: 800;" id="score-tech">—</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem;">Technical accuracy, concept coverage, problem solving.</p>
+          <div id="metric-tech" style="font-size: 0.75rem; font-weight: 600; color: var(--success-mint);"></div>
+        </div>
+
+        <div class="pillar-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--lavender-700);">COMMUNICATION (30%)</span>
+            <span class="mono" style="font-size: 1.25rem; font-weight: 800;" id="score-comm">—</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem;">Clarity, speaking pace (WPM), and filler frequency.</p>
+          <div id="metric-comm" style="font-size: 0.75rem; font-weight: 600; color: var(--info-sky);"></div>
+        </div>
+
+        <div class="pillar-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--lavender-700);">CONFIDENCE (25%)</span>
+            <span class="mono" style="font-size: 1.25rem; font-weight: 800;" id="score-conf">—</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem;">Engagement stability and response decisiveness.</p>
+          <div id="metric-conf" style="font-size: 0.75rem; font-weight: 600; color: var(--success-mint);"></div>
+        </div>
+
+        <div class="pillar-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--lavender-700);">PROFESSIONALISM (15%)</span>
+            <span class="mono" style="font-size: 1.25rem; font-weight: 800;" id="score-prof">—</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.4rem;">Time management, structure, and etiquette.</p>
+          <div id="metric-prof" style="font-size: 0.75rem; font-weight: 600; color: var(--lavender-600);"></div>
+        </div>
+      </section>
+
+      <section class="charts-row">
+        <div class="chart-box">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3>Session Progression Trend</h3>
+            <span class="sticker-badge" id="progression-count-badge">SESSIONS</span>
+          </div>
+          <canvas id="progression-chart" width="580" height="250"></canvas>
+        </div>
+
+        <div class="chart-box">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3>Competency Radar vs Benchmark</h3>
+            <span class="sticker-badge pink">BENCHMARK</span>
+          </div>
+          <canvas id="radar-chart" width="380" height="250"></canvas>
+        </div>
+      </section>
+
+      <section class="card" style="margin-bottom: 2rem;">
+        <h3 style="margin-bottom: 1rem;">Qualitative AI Assessment & Recommendations</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem;">
+          <div style="background: var(--lavender-50); border: 1px solid var(--lavender-200); border-radius: 16px; padding: 1.15rem;">
+            <h4 style="color: var(--lavender-700); margin-bottom: 0.45rem;">Demonstrated Strengths</h4>
+            <ul id="feedback-strengths-list" style="padding-left: 1.2rem; font-size: 0.86rem;"></ul>
+          </div>
+          <div style="background: var(--pink-50); border: 1px solid var(--pink-200); border-radius: 16px; padding: 1.15rem;">
+            <h4 style="color: var(--pink-600); margin-bottom: 0.45rem;">Areas for Improvement</h4>
+            <ul id="feedback-weaknesses-list" style="padding-left: 1.2rem; font-size: 0.86rem;"></ul>
+          </div>
+          <div style="background: var(--success-mint-bg); border: 1px solid rgba(16,185,129,0.25); border-radius: 16px; padding: 1.15rem;">
+            <h4 style="color: #065f46; margin-bottom: 0.45rem;">Actionable Practice & Resources</h4>
+            <ul id="feedback-resources-list" style="padding-left: 1.2rem; font-size: 0.86rem;"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3 style="margin-bottom: 1rem;">Question-by-Question Evaluation Breakdown</h3>
+        <div id="questions-accordion"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/api-v2.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/pages/insights.js"></script>
+</body>
+</html>

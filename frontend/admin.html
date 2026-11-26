@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartHire AI — Admin Governance & Terminal</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .admin-stats-strip {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem; margin-bottom: 1.75rem;
+    }
+    .admin-layout {
+      display: grid; grid-template-columns: 1.25fr 0.75fr;
+      gap: 1.5rem; margin-bottom: 1.75rem;
+    }
+    @media (max-width: 992px) {
+      .admin-stats-strip { grid-template-columns: repeat(2, 1fr); }
+      .admin-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .admin-stats-strip { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aurora-bg">
+    <div class="aurora-blob blob-1"></div>
+    <div class="aurora-blob blob-2"></div>
+    <div class="aurora-blob blob-3"></div>
+  </div>
+
+  <header id="app-nav"></header>
+
+  <main class="container">
+    <div style="margin-bottom: 1.75rem;">
+      <span class="sticker-badge pink">ADMINISTRATIVE TERMINAL</span>
+      <h1 style="margin-top: 0.45rem;">Platform Operations & Governance</h1>
+      <p style="color: var(--text-muted); font-size: 0.95rem;">
+        Real-time database telemetry, AI usage & cost monitoring, RBAC provisioning, and immutable security audit logs.
+      </p>
+    </div>
+
+    <section class="admin-stats-strip">
+      <div class="card">
+        <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted);">DATABASE STATUS</span>
+        <div class="mono" id="adm-db-status" style="font-size: 1.45rem; font-weight: 800; margin-top: 0.25rem;">—</div>
+        <span class="mono" id="adm-db-engine" style="font-size: 0.74rem; color: var(--success-mint);"></span>
+      </div>
+
+      <div class="card">
+        <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted);">AI TOKENS & COST</span>
+        <div class="mono" id="adm-tokens" style="font-size: 1.45rem; font-weight: 800; color: var(--lavender-700); margin-top: 0.25rem;">—</div>
+        <span id="adm-cost" style="font-size: 0.74rem; color: var(--text-muted);">Estimated Spend</span>
+      </div>
+
+      <div class="card">
+        <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted);">REGISTERED ACCOUNTS</span>
+        <div class="mono" id="adm-users-count" style="font-size: 1.45rem; font-weight: 800; margin-top: 0.25rem;">—</div>
+        <span id="adm-users-breakdown" style="font-size: 0.74rem; color: var(--text-muted);"></span>
+      </div>
+
+      <div class="card">
+        <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted);">INTERVIEWS & JOBS</span>
+        <div class="mono" id="adm-sessions-count" style="font-size: 1.45rem; font-weight: 800; color: var(--success-mint); margin-top: 0.25rem;">—</div>
+        <span id="adm-jobs-status" style="font-size: 0.74rem; color: var(--text-muted);"></span>
+      </div>
+    </section>
+
+    <div class="admin-layout">
+      <section class="card">
+        <h3 style="margin-bottom: 1rem;">User Role & Account Control</h3>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>User / Email</th>
+                <th>Assigned Role</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-user-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3 style="margin-bottom: 1rem;">Persistent AI & Platform Config</h3>
+        <form id="ai-settings-form">
+          <div class="form-group">
+            <label class="form-label" for="select-llm-backend">Active LLM Provider</label>
+            <select id="select-llm-backend" class="form-select">
+              <option value="Groq Llama-3.1-8B-Instant">Groq Llama-3.1-8B-Instant</option>
+              <option value="OpenAI GPT-4o-mini">OpenAI GPT-4o-mini</option>
+              <option value="Local Ollama Llama-3">Local Ollama Llama-3</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between;">
+              <label class="form-label" for="slider-temperature">Temperature</label>
+              <span class="mono" id="temp-val-display" style="font-size: 0.85rem; font-weight: 700;">0.40</span>
+            </div>
+            <input type="range" id="slider-temperature" min="0" max="1" step="0.05" value="0.4" style="width: 100%; accent-color: var(--lavender-600);">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="input-max-tokens">Max Output Tokens</label>
+            <input type="number" id="input-max-tokens" class="form-input" value="1500" min="200" max="8000">
+          </div>
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:600; cursor:pointer;">
+              <input type="checkbox" id="chk-maintenance-mode"> Maintenance Mode (Pause non-admin sessions)
+            </label>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">💾 Persist Configuration</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <h3>Security & System Audit Log Console</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Live database-backed AuditLog events</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <select id="log-level-filter" class="form-select" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; width: auto;">
+            <option value="">All Levels</option>
+            <option value="INFO">INFO Only</option>
+            <option value="WARN">WARN Only</option>
+            <option value="ERROR">ERROR Only</option>
+          </select>
+          <button type="button" id="pause-logs-btn" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">Pause Stream</button>
+        </div>
+      </div>
+      <div id="admin-log-console" class="dark-console"></div>
+    </section>
+  </main>
+
+  <script src="js/api-v2.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/pages/admin.js"></script>
+</body>
+</html>

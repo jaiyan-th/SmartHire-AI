@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartHire AI — Candidate Assessment Platform | Login</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .auth-container {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      align-items: center;
+      padding: 2rem;
+      max-width: 1300px;
+      margin: 0 auto;
+      gap: 3rem;
+    }
+    .auth-hero-card {
+      padding: 3rem;
+      background: var(--glass-surface);
+      border: 1px solid var(--glass-border);
+      border-radius: 28px;
+      box-shadow: var(--shadow-lg);
+    }
+    .auth-form-card {
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 2.25rem;
+      box-shadow: var(--shadow-lg);
+    }
+    .demo-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1.25rem;
+      padding: 0.9rem;
+      background: var(--lavender-50);
+      border-radius: 14px;
+      border: 1px dashed var(--lavender-300);
+    }
+    .demo-chip {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      background: #ffffff;
+      border: 1px solid var(--lavender-200);
+      color: var(--lavender-700);
+      cursor: pointer;
+      transition: all var(--ease-fast);
+    }
+    .demo-chip:hover {
+      background: var(--lavender-100);
+      border-color: var(--lavender-500);
+    }
+    .auth-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      background: var(--lavender-50);
+      padding: 0.3rem;
+      border-radius: 9999px;
+    }
+    .auth-tab-btn {
+      flex: 1;
+      padding: 0.6rem;
+      border-radius: 9999px;
+      border: none;
+      background: transparent;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text-body);
+      cursor: pointer;
+      transition: all var(--ease-fast);
+    }
+    .auth-tab-btn.active {
+      background: #ffffff;
+      color: var(--text-heading);
+      box-shadow: var(--shadow-sm);
+    }
+    .pw-wrap { position: relative; }
+    .pw-toggle {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--lavender-700);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    @media (max-width: 900px) {
+      .auth-container { grid-template-columns: 1fr; padding: 1rem; }
+      .auth-hero-card { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="aurora-bg">
+    <div class="aurora-blob blob-1"></div>
+    <div class="aurora-blob blob-2"></div>
+    <div class="aurora-blob blob-3"></div>
+  </div>
+
+  <main class="auth-container">
+    <section class="auth-hero-card">
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+        <span class="sticker-badge">PROJECT SPECIFICATION</span>
+        <span class="sticker-badge pink">INFOSYS SPRINGBOARD CAPSTONE</span>
+      </div>
+      <h1 style="margin-bottom: 1rem;">
+        Autonomous Candidate Assessment & <span class="text-gradient">Mock Interview</span> Platform
+      </h1>
+      <p style="font-size: 1.05rem; color: var(--text-body); margin-bottom: 2rem;">
+        Master technical, HR, behavioral, and aptitude interviews with live speech analytics, optional webcam presentation coaching, ATS resume parsing, and deterministic 4-pillar scoring.
+      </p>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+        <div style="background: var(--lavender-50); padding: 1rem; border-radius: 16px;">
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">Deterministic Rubric</h4>
+          <p style="font-size: 0.8rem; margin: 0; color: var(--text-muted);">
+            Communication 30% • Confidence 25% • Technical 30% • Professionalism 15%
+          </p>
+        </div>
+        <div style="background: var(--pink-50); padding: 1rem; border-radius: 16px;">
+          <h4 style="font-size: 0.95rem; margin-bottom: 0.25rem;">Privacy & RBAC Isolation</h4>
+          <p style="font-size: 0.8rem; margin: 0; color: var(--text-muted);">
+            Private practice mocks stay private unless explicitly shared with recruiters.
+          </p>
+        </div>
+      </div>
+
+      <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
+        <div class="status-dot"></div>
+        <span>Production Stack: Django • DRF • SimpleJWT • PostgreSQL • Celery • ReportLab</span>
+      </div>
+    </section>
+
+    <section class="auth-form-card">
+      <div style="text-align: center; margin-bottom: 1.25rem;">
+        <div class="nav-logo-icon" style="margin: 0 auto 0.65rem auto; width: 44px; height: 44px; font-size: 1.35rem;">S</div>
+        <h2>Welcome to SmartHire</h2>
+        <p style="color: var(--text-muted); font-size: 0.88rem;">Sign in to access your assessment workspace</p>
+      </div>
+
+      <div class="auth-tabs" role="tablist">
+        <button id="tab-login" class="auth-tab-btn active" role="tab" aria-selected="true">Sign In</button>
+        <button id="tab-register" class="auth-tab-btn" role="tab" aria-selected="false">Candidate Sign Up</button>
+      </div>
+
+      <div id="auth-inline-error" role="alert" style="display:none; background:var(--danger-rose-bg); color:var(--danger-rose); padding:0.7rem 0.9rem; border-radius:12px; font-size:0.84rem; font-weight:600; margin-bottom:1rem;"></div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="email">Work or Personal Email</label>
+          <input type="email" id="email" data-testid="email" class="form-input" placeholder="name@domain.com" required value="candidate@demo.com">
+        </div>
+        <div class="form-group">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label class="form-label" for="password">Password</label>
+            <button type="button" id="forgot-password-link" style="background:none; border:none; color:var(--lavender-700); font-size:0.78rem; font-weight:600; cursor:pointer;">Forgot password?</button>
+          </div>
+          <div class="pw-wrap">
+            <input type="password" id="password" data-testid="password" class="form-input" placeholder="••••••••" required value="Demo@1234">
+            <button type="button" id="toggle-pw-btn" class="pw-toggle" aria-label="Show password">Show</button>
+          </div>
+        </div>
+        <button type="submit" id="login-btn" data-testid="login-btn" class="btn btn-primary" style="width: 100%; margin-top: 0.4rem;">
+          Sign In to Portal
+        </button>
+      </form>
+
+      <form id="register-form" style="display: none;">
+        <div class="form-group">
+          <label class="form-label" for="reg-name">Full Name</label>
+          <input type="text" id="reg-name" class="form-input" placeholder="Jane Doe" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-email">Email Address</label>
+          <input type="email" id="reg-email" class="form-input" placeholder="jane@example.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-target-role">Target Role</label>
+          <input type="text" id="reg-target-role" class="form-input" placeholder="Full Stack Software Engineer" value="Full Stack Software Engineer">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-password">Password (min 8 chars, non-common)</label>
+          <input type="password" id="reg-password" class="form-input" placeholder="••••••••" required minlength="8">
+        </div>
+        <p style="font-size: 0.76rem; color: var(--text-muted); margin-bottom: 0.9rem;">
+          Public registration creates a Candidate account. Recruiter & Admin privileges are provisioned by platform administrators.
+        </p>
+        <button type="submit" id="register-btn" data-testid="register-btn" class="btn btn-primary" style="width: 100%;">
+          Create Candidate Account
+        </button>
+      </form>
+
+      <div class="demo-chips">
+        <span style="font-size: 0.72rem; font-weight: 700; color: var(--lavender-700); width: 100%; margin-bottom: 0.2rem;">
+          ⚡ ONE-CLICK DEMO ACCOUNTS (Password: Demo@1234)
+        </span>
+        <button type="button" class="demo-chip" data-email="candidate@demo.com">Candidate Demo</button>
+        <button type="button" class="demo-chip" data-email="recruiter@demo.com">Recruiter Demo</button>
+        <button type="button" class="demo-chip" data-email="admin@demo.com">Administrator Demo</button>
+      </div>
+
+      <div style="margin-top: 1.25rem; text-align: center;">
+        <span style="font-size: 0.78rem; color: var(--text-muted);">Enterprise SSO Options</span>
+        <div style="display: flex; gap: 0.65rem; justify-content: center; margin-top: 0.6rem;">
+          <button type="button" id="oauth-google" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.42rem 0.95rem;">
+            Google OAuth2
+          </button>
+          <button type="button" id="oauth-github" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.42rem 0.95rem;">
+            GitHub SSO
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Forgot / Reset Password Modal -->
+  <div id="forgot-modal" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal-card" style="max-width: 460px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h3>Password Recovery</h3>
+        <button type="button" id="close-forgot-modal" class="btn btn-ghost">✕</button>
+      </div>
+      <form id="forgot-form">
+        <div class="form-group">
+          <label class="form-label" for="forgot-email">Account Email</label>
+          <input type="email" id="forgot-email" class="form-input" required placeholder="you@example.com">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Request Reset Token</button>
+      </form>
+      <div id="reset-step" style="display:none; margin-top:1.25rem; border-top:1px solid var(--lavender-100); padding-top:1rem;">
+        <p id="reset-info-msg" style="font-size:0.82rem; color:var(--text-body);"></p>
+        <form id="reset-confirm-form">
+          <div class="form-group">
+            <label class="form-label" for="reset-token-input">Reset Token</label>
+            <input type="text" id="reset-token-input" class="form-input" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reset-new-pw">New Password (min 8 chars)</label>
+            <input type="password" id="reset-new-pw" class="form-input" minlength="8" required>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;">Reset Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api-v2.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/pages/auth.js"></script>
+</body>
+</html>
