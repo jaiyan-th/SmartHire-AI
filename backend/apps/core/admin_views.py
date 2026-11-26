@@ -1,15 +1,33 @@
 from datetime import timedelta
+import time
+import uuid
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection
-from django.db.models import Avg, Sum
+from django.db.models import Avg, Q, Sum
 from django.utils import timezone
 from rest_framework import views, status, response
 from apps.accounts.models import User, UserRole, PasswordResetToken
 from apps.accounts.permissions import IsAdminUserRole
 from apps.accounts.serializers import UserSerializer
+from apps.accounts.views import revoke_all_user_tokens
 from apps.core.audit import log_audit_event
 from apps.core.models import AuditLog, PlatformConfig, AIUsageRecord, BackgroundJob
+from apps.core.views import APP_START_MONOTONIC
+from apps.evaluations.models import Evaluation
 from apps.interviews.models import InterviewSession
 from apps.resumes.models import Resume
+
+
+def _format_uptime(seconds: int) -> str:
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    if days > 0:
+        return f"{days}d {hours}h {minutes}m"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m {seconds % 60}s"
 
 
 class AdminOverviewView(views.APIView):
@@ -21,6 +39,7 @@ class AdminOverviewView(views.APIView):
         recruiter_count = User.objects.filter(role=UserRole.RECRUITER).count()
         total_sessions = InterviewSession.objects.count()
         total_resumes = Resume.objects.count()
+        total_evaluations = Evaluation.objects.count()
 
         usage_agg = AIUsageRecord.objects.aggregate(
             total_prompt=Sum('prompt_tokens'),
@@ -34,29 +53,37 @@ class AdminOverviewView(views.APIView):
         completed_jobs = BackgroundJob.objects.filter(status='completed').count()
 
         db_ok = True
+        db_start = time.monotonic()
         try:
             with connection.cursor() as cursor:
                 cursor.execute('SELECT 1')
+            db_ping_ms = round((time.monotonic() - db_start) * 1000, 2)
         except Exception:
             db_ok = False
+            db_ping_ms = None
 
         config = PlatformConfig.get_solo()
+        uptime_secs = int(time.monotonic() - APP_START_MONOTONIC)
 
         return response.Response({
             'db_status': 'Healthy' if db_ok else 'Degraded',
             'db_engine': connection.vendor,
+            'db_ping_ms': db_ping_ms,
             'llm_backend': config.llm_backend,
             'llm_latency_ms': avg_latency,
             'registered_users': total_users,
             'candidate_count': candidate_count,
             'recruiter_count': recruiter_count,
             'total_sessions': total_sessions,
+            'total_evaluations': total_evaluations,
             'total_resumes': total_resumes,
             'token_consumption_total': total_tokens,
             'estimated_total_cost': f"${(usage_agg['total_cost'] or 0.0):.4f}",
             'background_jobs_completed': completed_jobs,
             'background_jobs_failed': failed_jobs,
-            'system_uptime': '99.98%',
+            'maintenance_mode': config.maintenance_mode,
+            'uptime_seconds': uptime_secs,
+            'system_uptime': _format_uptime(uptime_secs),
         })
 
 
@@ -65,7 +92,53 @@ class AdminUsersView(views.APIView):
 
     def get(self, request):
         users = User.objects.all().order_by('-created_at')
+        q = (request.query_params.get('q') or '').strip()
+        role_filter = (request.query_params.get('role') or '').strip().lower()
+        if q:
+            users = users.filter(Q(email__icontains=q) | Q(full_name__icontains=q))
+        if role_filter:
+            users = users.filter(role__iexact=role_filter)
         return response.Response(UserSerializer(users, many=True).data)
+
+    def post(self, request):
+        email = str(request.data.get('email') or '').strip().lower()
+        password = str(request.data.get('password') or '')
+        full_name = str(request.data.get('full_name') or '').strip()
+        role = str(request.data.get('role') or UserRole.CANDIDATE).strip().lower()
+
+        if not email or not password:
+            return response.Response({'error': 'email and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_roles = [r[0] for r in UserRole.choices]
+        if role not in valid_roles:
+            return response.Response({'error': f'Invalid role. Allowed: {valid_roles}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(email__iexact=email).exists():
+            return response.Response({'error': 'An account with this email already exists.'}, status=status.HTTP_409_CONFLICT)
+
+        try:
+            validate_password(password)
+        except DjangoValidationError as exc:
+            return response.Response({'error': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        base = email.split('@')[0][:20]
+        user = User.objects.create_user(
+            username=f"{base}_{uuid.uuid4().hex[:8]}",
+            email=email,
+            password=password,
+            full_name=full_name or base.title(),
+            role=role,
+            is_staff=(role == UserRole.ADMIN),
+            is_email_verified=True,
+        )
+        log_audit_event(
+            'ADMIN_USER_CREATED',
+            f"Admin {request.user.email} provisioned {role} account for {user.email}.",
+            level='WARN',
+            user_email=request.user.email,
+            request=request,
+        )
+        return response.Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, pk=None):
         user_id = pk or request.data.get('user_id')
@@ -80,6 +153,9 @@ class AdminUsersView(views.APIView):
 
         if user.id == request.user.id and is_active is False:
             return response.Response({'error': 'Administrators cannot deactivate their own active account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if user.id == request.user.id and new_role and new_role != UserRole.ADMIN:
+            return response.Response({'error': 'Administrators cannot demote their own admin role.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if new_role:
             valid_roles = [r[0] for r in UserRole.choices]
@@ -98,6 +174,8 @@ class AdminUsersView(views.APIView):
 
         if is_active is not None:
             user.is_active = bool(is_active)
+            if not user.is_active:
+                revoke_all_user_tokens(user)
             log_audit_event(
                 'ADMIN_ACCOUNT_STATUS_CHANGED',
                 f"Admin {request.user.email} set is_active={user.is_active} for {user.email}.",
@@ -110,6 +188,7 @@ class AdminUsersView(views.APIView):
 
         reset_token_preview = None
         if issue_reset:
+            PasswordResetToken.objects.filter(user=user, used=False).update(used=True)
             token_obj = PasswordResetToken.objects.create(
                 user=user,
                 expires_at=timezone.now() + timedelta(minutes=30),
@@ -134,9 +213,16 @@ class AdminLogsView(views.APIView):
 
     def get(self, request):
         level_filter = (request.query_params.get('level') or '').strip()
+        event_type = (request.query_params.get('event_type') or '').strip()
+        q = (request.query_params.get('q') or '').strip()
+
         logs = AuditLog.objects.all()
         if level_filter:
             logs = logs.filter(level__iexact=level_filter)
+        if event_type:
+            logs = logs.filter(event_type__icontains=event_type)
+        if q:
+            logs = logs.filter(Q(message__icontains=q) | Q(user_email__icontains=q) | Q(event_type__icontains=q))
         logs = logs[:100]
 
         return response.Response([
@@ -169,24 +255,28 @@ class AdminSettingsView(views.APIView):
 
     def post(self, request):
         config = PlatformConfig.get_solo()
-        if 'llm_backend' in request.data:
-            config.llm_backend = str(request.data['llm_backend'])[:100]
-        if 'temperature' in request.data:
-            temp = float(request.data['temperature'])
-            if not (0.0 <= temp <= 1.0):
-                return response.Response({'error': 'Temperature must be between 0.0 and 1.0.'}, status=status.HTTP_400_BAD_REQUEST)
-            config.temperature = temp
-        if 'max_tokens' in request.data:
-            tokens = int(request.data['max_tokens'])
-            if not (200 <= tokens <= 8000):
-                return response.Response({'error': 'max_tokens must be between 200 and 8000.'}, status=status.HTTP_400_BAD_REQUEST)
-            config.max_tokens = tokens
-        if 'max_question_count' in request.data:
-            config.max_question_count = max(1, min(int(request.data['max_question_count']), 20))
-        if 'daily_token_budget' in request.data:
-            config.daily_token_budget = max(1000, int(request.data['daily_token_budget']))
-        if 'maintenance_mode' in request.data:
-            config.maintenance_mode = bool(request.data['maintenance_mode'])
+        try:
+            if 'llm_backend' in request.data:
+                config.llm_backend = str(request.data['llm_backend']).strip()[:100]
+            if 'temperature' in request.data:
+                temp = float(request.data['temperature'])
+                if not (0.0 <= temp <= 1.0):
+                    return response.Response({'error': 'Temperature must be between 0.0 and 1.0.'}, status=status.HTTP_400_BAD_REQUEST)
+                config.temperature = temp
+            if 'max_tokens' in request.data:
+                tokens = int(request.data['max_tokens'])
+                if not (200 <= tokens <= 8000):
+                    return response.Response({'error': 'max_tokens must be between 200 and 8000.'}, status=status.HTTP_400_BAD_REQUEST)
+                config.max_tokens = tokens
+            if 'max_question_count' in request.data:
+                config.max_question_count = max(1, min(int(request.data['max_question_count']), 20))
+            if 'daily_token_budget' in request.data:
+                config.daily_token_budget = max(1000, int(request.data['daily_token_budget']))
+            if 'maintenance_mode' in request.data:
+                config.maintenance_mode = bool(request.data['maintenance_mode'])
+        except (TypeError, ValueError):
+            return response.Response({'error': 'Invalid numeric configuration parameter.'}, status=status.HTTP_400_BAD_REQUEST)
+
         config.save()
 
         log_audit_event(

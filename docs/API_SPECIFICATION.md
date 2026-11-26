@@ -21,7 +21,9 @@
 | `POST` | `/api/auth/forgot-password` | Public | Issue password reset token (enumeration-safe) |
 | `POST` | `/api/auth/reset-password` | Public | Complete password reset using valid token |
 | `POST` | `/api/auth/verify-email` | Public | Verify email token |
-| `GET` | `/api/auth/export-data` | Bearer | Export user's complete profile, resumes, and interviews as JSON |
+| `POST` | `/api/auth/resend-verification` | Bearer | Re-issue email verification token |
+| `GET` | `/api/auth/providers` | Public | Discover enabled auth / OAuth2 providers |
+| `GET` | `/api/auth/export-data` | Bearer | Export user's complete profile, resumes, evaluations, milestones, and interviews as JSON |
 
 ### Resumes & ATS Parser (`/api/resume/`)
 | Method | Endpoint | Auth | Description |
@@ -34,7 +36,9 @@
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `POST` | `/api/interview/start` | Bearer | Initialize interview session and synthesize/rank questions |
-| `GET` | `/api/interview/<uuid:pk>` | Owner/Recruiter* | Recover active session state, questions, answers, and server timer |
+| `GET/DELETE` | `/api/interview/<uuid:pk>` | Owner/Recruiter* | Recover active session state, questions, answers, server timer, or delete practice session |
+| `POST` | `/api/interview/<uuid:pk>/cancel` | Owner/Admin | Cancel an active or ready interview session |
+| `POST` | `/api/interview/<uuid:pk>/telemetry` | Owner | Record proctoring telemetry events and threshold flags |
 | `POST` | `/api/interview/answer` | Owner | Idempotently save/update speech or code answer + compute WPM/fillers |
 | `POST` | `/api/interview/finish` | Owner | Atomically complete session & run 4-pillar deterministic evaluation |
 | `PATCH` | `/api/interview/<uuid:pk>/share` | Owner | Toggle `shared_with_recruiters` privacy permission |
@@ -47,7 +51,8 @@
 | `GET` | `/api/analytics/insights` | Bearer | Real DB progression trend, radar comparison, and Q&A breakdown |
 | `GET` | `/api/analytics/skill-gap` | Bearer | Role benchmarks, weak areas, and persistent roadmap milestones |
 | `PATCH` | `/api/analytics/skill-gap/milestone` | Bearer | Persist completion toggle for a roadmap milestone |
-| `GET` | `/api/reports/download-pdf` | Owner/Recruiter* | Stream certified ReportLab PDF dossier |
+| `GET` | `/api/reports/download-pdf` | Owner/Recruiter* | Stream certified ReportLab PDF dossier with HMAC digest header |
+| `GET` | `/api/reports/verify/<uuid:pk>` | Owner/Recruiter* | Verify tamper-resistant dossier HMAC-SHA256 digest |
 
 ### Recruiter Operations (`/api/recruiter/`)
 | Method | Endpoint | Auth | Description |
@@ -58,12 +63,13 @@
 | `GET` | `/api/recruiter/compare` | Recruiter/Admin | Side-by-side comparison across `?session_ids=id1,id2` |
 | `GET` | `/api/recruiter/export-csv` | Recruiter/Admin | Download CSV export of authorized candidate evaluations |
 | `GET/POST` | `/api/recruiter/templates` | Recruiter/Admin | List or create standardized interview templates |
+| `GET/PATCH/DELETE` | `/api/recruiter/templates/<uuid:pk>` | Recruiter/Admin | Inspect, update, or archive a specific interview template |
 
 ### Admin Terminal & Health (`/api/admin-terminal/`, `/api/core/`)
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/admin-terminal/overview` | Admin | Live DB health, token spend, user/session counts, job status |
-| `GET` | `/api/admin-terminal/users` | Admin | List all user accounts |
+| `GET` | `/api/admin-terminal/overview` | Admin | Live DB health/ping, uptime, token spend, user/session counts, job status |
+| `GET/POST` | `/api/admin-terminal/users` | Admin | List/search user accounts or provision new role accounts |
 | `PATCH` | `/api/admin-terminal/users/<uuid:pk>` | Admin | Update user role, toggle active status, or issue password reset |
 | `GET` | `/api/admin-terminal/logs` | Admin | Query immutable `AuditLog` stream (`?level=INFO|WARN|ERROR`) |
 | `GET/POST` | `/api/admin-terminal/settings` | Admin | Read or persist `PlatformConfig` (LLM provider, temperature, maintenance) |

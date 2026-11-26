@@ -17,10 +17,22 @@ from apps.core.models import AuditLog, PlatformConfig
 
 
 class Command(BaseCommand):
-    help = 'Seeds database with required demo users, templates, sessions, resumes, and evaluation records.'
+    help = 'Initializes default platform configuration. Pass --demo to populate optional sample data.'
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--demo',
+            action='store_true',
+            help='Populate optional demo accounts and sample records (disabled by default in production).',
+        )
 
     def handle(self, *args, **options):
-        self.stdout.write("Seeding SmartHire AI database...")
+        PlatformConfig.get_solo()
+        if not options.get('demo'):
+            self.stdout.write(self.style.SUCCESS("PlatformConfig initialized with clean zero-mock production database."))
+            return
+
+        self.stdout.write("Seeding SmartHire AI demo dataset (--demo)...")
 
         PlatformConfig.get_solo()
 

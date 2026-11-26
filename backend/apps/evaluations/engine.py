@@ -1,4 +1,33 @@
+import re
 from integrations.ai.provider import AIProviderService
+
+DOMAIN_RESOURCES = {
+    'Software Engineering': [
+        {"title": "System Design Primer & Scalability Patterns", "url": "https://github.com/donnemartin/system-design-primer", "domain": "Architecture"},
+        {"title": "MDN Web Docs — HTTP & REST Architecture", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP", "domain": "Web Engineering"},
+        {"title": "Official Python 3 Documentation", "url": "https://docs.python.org/3/", "domain": "Programming"},
+    ],
+    'AI/ML': [
+        {"title": "Hugging Face LLM & Transformer Course", "url": "https://huggingface.co/learn/llm-course/", "domain": "AI/ML"},
+        {"title": "Retrieval-Augmented Generation Evaluation Guide", "url": "https://docs.ragas.io/", "domain": "RAG & Evals"},
+        {"title": "OWASP Top 10 for LLM Applications", "url": "https://genai.owasp.org/llm-top-10/", "domain": "AI Security"},
+    ],
+    'Data Science': [
+        {"title": "PostgreSQL Performance & Indexing Tips", "url": "https://www.postgresql.org/docs/current/performance-tips.html", "domain": "Databases"},
+        {"title": "Scikit-Learn User Guide — Model Evaluation", "url": "https://scikit-learn.org/stable/modules/model_evaluation.html", "domain": "Data Science"},
+        {"title": "Trustworthy Online Controlled Experiments (A/B Testing)", "url": "https://experimentguide.com/", "domain": "Experimentation"},
+    ],
+    'DevOps & Cloud': [
+        {"title": "Docker Multi-Stage & Security Best Practices", "url": "https://docs.docker.com/build/building/best-practices/", "domain": "Containers"},
+        {"title": "Kubernetes Official Production Best Practices", "url": "https://kubernetes.io/docs/setup/best-practices/", "domain": "Orchestration"},
+        {"title": "Google SRE Book — Service Level Objectives", "url": "https://sre.google/sre-book/service-level-objectives/", "domain": "SRE"},
+    ],
+    'Product Management': [
+        {"title": "Intercom on Product Management & Prioritization", "url": "https://www.intercom.com/resources/books/intercom-product-management", "domain": "Product Strategy"},
+        {"title": "Google PAIR — People + AI Guidebook", "url": "https://pair.withgoogle.com/guidebook", "domain": "AI Product"},
+        {"title": "Reforge — Product Metrics & Funnel Analysis", "url": "https://www.reforge.com/blog", "domain": "Analytics"},
+    ],
+}
 
 
 def compute_overall_score(comm: float, conf: float, tech: float, prof: float) -> float:
@@ -22,6 +51,12 @@ def get_rating_band(score: float) -> str:
     return "Poor"
 
 
+def _has_structured_code(code_text: str) -> bool:
+    if not code_text:
+        return False
+    return bool(re.search(r'\b(def |class |function |const |let |SELECT |FROM |WHERE |try:|catch|return )\b', code_text, re.IGNORECASE))
+
+
 def evaluate_completed_interview(session):
     """
     Calculates deterministic 4-pillar scores and evidence-based critique
@@ -29,7 +64,7 @@ def evaluate_completed_interview(session):
     """
     from .models import Evaluation
 
-    answers = session.answers.select_related('question').all()
+    answers = list(session.answers.select_related('question').all())
     questions = list(session.questions.all().order_by('order'))
     user_email = session.candidate.email if session.candidate else 'anonymous'
     ai_service = AIProviderService(user_email=user_email)
@@ -48,18 +83,19 @@ def evaluate_completed_interview(session):
 
     for q in questions:
         ans = next((a for a in answers if a.question_id == q.id), None)
-        user_text = ((ans.transcript_text or '') + '\n' + (ans.code_text or '')).strip() if ans else ''
+        transcript = (ans.transcript_text or '').strip() if ans else ''
+        code = (ans.code_text or '').strip() if ans else ''
+        user_text = (transcript + '\n' + code).strip()
 
         if ans and user_text:
             answered_count += 1
             words = user_text.split()
             words_len = len(words)
+            is_code_heavy = ans.input_mode == 'code' or (len(code) > len(transcript))
 
-            # Keyword alignment
             matched_keywords = [kw for kw in (q.expected_keywords or []) if kw.lower() in user_text.lower()]
             keyword_ratio = len(matched_keywords) / max(len(q.expected_keywords or []), 1)
 
-            # Optional LLM critique if provider key configured
             ai_critique = ai_service.evaluate_answer(
                 prompt_text=q.prompt,
                 model_answer=q.model_answer,
@@ -74,40 +110,43 @@ def evaluate_completed_interview(session):
                 improvements_text = ai_critique['improvements']
             else:
                 depth_bonus = min(words_len * 0.45, 22)
-                tech_q = round(min(max(42 + (keyword_ratio * 38) + depth_bonus, 30), 96), 1)
+                code_bonus = 6.0 if is_code_heavy and _has_structured_code(code) else 0.0
+                tech_q = round(min(max(42 + (keyword_ratio * 38) + depth_bonus + code_bonus, 30), 96), 1)
                 critique_text = (
                     f"Matched {len(matched_keywords)}/{max(len(q.expected_keywords or []), 1)} expected concepts "
-                    f"({', '.join(matched_keywords[:4]) if matched_keywords else 'general terminology'}) across {words_len} words."
+                    f"({', '.join(matched_keywords[:4]) if matched_keywords else 'general terminology'}) across {words_len} tokens."
                 )
-                strengths_text = (
-                    f"Addressed '{q.competency}' with {ans.wpm} WPM cadence."
-                    if ans.wpm > 0
-                    else f"Provided structured written/code solution for '{q.competency}'."
-                )
+                if is_code_heavy:
+                    strengths_text = f"Submitted structured {ans.language} code/written solution for '{q.competency}'."
+                elif ans.wpm > 0:
+                    strengths_text = f"Addressed '{q.competency}' with {ans.wpm} WPM cadence."
+                else:
+                    strengths_text = f"Provided structured written response for '{q.competency}'."
+
                 missing_kw = [kw for kw in (q.expected_keywords or []) if kw not in matched_keywords]
                 improvements_text = (
                     f"Incorporate missing concepts such as: {', '.join(missing_kw[:3])}."
                     if missing_kw
-                    else "Add concrete production trade-offs and edge-case examples."
+                    else "Add concrete production trade-offs, complexity bounds, and edge-case examples."
                 )
 
-            # Communication score based on completeness, WPM, and filler frequency
             wpm = ans.wpm or 0
-            if wpm > 0:
+            if wpm > 0 and not is_code_heavy:
                 total_wpm += wpm
                 wpm_samples += 1
             total_fillers += ans.filler_words_count
 
-            comm_q = 82.0 + min(words_len * 0.2, 12.0)
-            if wpm > 0 and (wpm < 95 or wpm > 185):
-                comm_q -= 10.0
-            if ans.filler_words_count > 2:
-                comm_q -= min((ans.filler_words_count - 2) * 3.0, 18.0)
+            if is_code_heavy:
+                comm_q = 80.0 + min(words_len * 0.25, 12.0) + (4.0 if _has_structured_code(code) else 0.0)
+            else:
+                comm_q = 82.0 + min(words_len * 0.2, 12.0)
+                if wpm > 0 and (wpm < 95 or wpm > 185):
+                    comm_q -= 10.0
+                if ans.filler_words_count > 2:
+                    comm_q -= min((ans.filler_words_count - 2) * 3.0, 18.0)
             comm_q = round(min(max(comm_q, 35.0), 97.0), 1)
 
-            # Confidence score: camera-optional fairness!
-            # If camera enabled & eye_contact recorded (>0), blend gaze stability with fluency;
-            # If camera disabled, evaluate strictly from hesitation & response decisiveness.
+            # Camera-optional fairness: never penalize candidates when camera is off
             if session.camera_enabled and ans.eye_contact_percentage > 0:
                 eye_samples.append(ans.eye_contact_percentage)
                 conf_q = round(min(max((ans.eye_contact_percentage * 0.6) + (comm_q * 0.4), 40.0), 97.0), 1)
@@ -115,7 +154,6 @@ def evaluate_completed_interview(session):
                 hesitation_penalty = min(ans.filler_words_count * 3.5, 20.0)
                 conf_q = round(min(max(86.0 - hesitation_penalty + min(words_len * 0.15, 8.0), 45.0), 95.0), 1)
 
-            # Professionalism: time adherence & response organization
             time_ok = 10 <= (ans.duration_seconds or 30) <= 180
             prof_q = 85.0 if time_ok else 72.0
             if words_len >= 20:
@@ -136,7 +174,7 @@ def evaluate_completed_interview(session):
                 'critique': critique_text,
                 'strengths': strengths_text,
                 'improvements': improvements_text,
-                'wpm': ans.wpm,
+                'wpm': 0 if is_code_heavy else ans.wpm,
                 'filler_words_count': ans.filler_words_count,
                 'score': round((tech_q + comm_q) / 2, 1),
             })
@@ -196,17 +234,16 @@ def evaluate_completed_interview(session):
         "Replace verbal fillers with brief 2-second deliberate pauses when organizing technical explanations.",
         "Structure behavioral answers explicitly using STAR (Situation, Task, Action, Result) with measurable outcomes.",
     ]
+    if base_tech < 75:
+        improvement_suggestions.append(f"Review core {session.domain} concepts and include concrete time/space/latency trade-offs.")
 
+    low_competencies = [qe['competency'] for qe in question_evaluations if qe['score'] < 75]
     practice_recommendations = [
-        f"Run a targeted {session.domain} drill focusing on core trade-offs and time-bounded explanations.",
-        "Review the model answers in the question breakdown below and compare missing technical concepts.",
+        f"Run a targeted {session.domain} drill focusing on {low_competencies[0] if low_competencies else 'core architecture trade-offs'}."
     ]
+    practice_recommendations.append("Compare each submitted response against the reference model answers in the breakdown below.")
 
-    learning_resources = [
-        {"title": "System Design Primer & Scalability Patterns", "url": "https://github.com/donnemartin/system-design-primer", "domain": "Architecture"},
-        {"title": "MDN Web Docs — HTTP & REST Architecture", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP", "domain": "Web Engineering"},
-        {"title": "Official Python 3 Documentation", "url": "https://docs.python.org/3/", "domain": "Programming"},
-    ]
+    learning_resources = DOMAIN_RESOURCES.get(session.domain, DOMAIN_RESOURCES['Software Engineering'])
 
     evaluation, _ = Evaluation.objects.update_or_create(
         session=session,

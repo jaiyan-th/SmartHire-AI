@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-canvas: #F7F7F5;
+  --bg-surface: #FFFFFF;
+  --bg-surface-2: #F0F0EC;
+  --border-subtle: #E5E5E0;
+  --border-strong: #C9C9C2;
+  --text-primary: #111111;
+  --text-secondary: #52524E;
+  --text-muted: #787872;
+  --accent-lime: #C9F45B;
+  --accent-ink: #111111;
+
+  --status-success: #15803D;
+  --status-success-bg: #ECFDF5;
+  --status-warning: #B45309;
+  --status-warning-bg: #FFFBEB;
+  --status-danger: #B91C1C;
+  --status-danger-bg: #FEF2F2;
+
+  --ease-signature: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dark {
+  --bg-canvas: #090909;
+  --bg-surface: #121212;
+  --bg-surface-2: #1A1A1A;
+  --border-subtle: #242424;
+  --border-strong: #383838;
+  --text-primary: #F5F5F4;
+  --text-secondary: #A3A3A0;
+  --text-muted: #737370;
+  --accent-lime: #C9F45B;
+  --accent-ink: #111111;
+
+  --status-success: #4ADE80;
+  --status-success-bg: rgba(74, 222, 128, 0.12);
+  --status-warning: #FBBF24;
+  --status-warning-bg: rgba(251, 191, 36, 0.12);
+  --status-danger: #F87171;
+  --status-danger-bg: rgba(248, 113, 113, 0.12);
+}
+
+@layer base {
+  html {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: Inter, Geist, system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    transition: background-color 220ms var(--ease-signature), color 220ms var(--ease-signature);
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: "Space Grotesk", Geist, Inter, system-ui, sans-serif;
+    letter-spacing: -0.028em;
+  }
+
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--text-primary);
+    outline-offset: 2px;
+  }
+}
+
+.dark :focus-visible {
+  outline-color: #C9F45B;
+}
+
+.bg-grid-subtle {
+  background-image:
+    linear-gradient(to right, rgba(17, 17, 17, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(17, 17, 17, 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.dark .bg-grid-subtle {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.bg-dot-matrix {
+  background-image: radial-gradient(var(--border-strong) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.card-elevated {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    0 1px 2px rgba(17, 17, 17, 0.03),
+    0 12px 32px -16px rgba(17, 17, 17, 0.07);
+  transition: border-color 180ms var(--ease-signature), box-shadow 220ms var(--ease-signature);
+}
+
+.dark .card-elevated {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 16px 36px -18px rgba(0, 0, 0, 0.65);
+}
+
+.studio-spotlight {
+  background-image: radial-gradient(
+    65% 55% at 50% 42%,
+    rgba(201, 244, 91, 0.08) 0%,
+    rgba(201, 244, 91, 0.02) 45%,
+    transparent 75%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes subtleShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface-2) 25%,
+    var(--border-subtle) 50%,
+    var(--bg-surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: subtleShimmer 1.6s infinite linear;
+}
+
+/* Custom slim scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+@media print {
+  body {
+    background: #FFFFFF !important;
+    color: #111111 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

@@ -5,10 +5,18 @@ from django.conf.urls.static import static
 from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-FRONTEND_DIR = settings.BASE_DIR.parent / 'frontend'
+FRONTEND_DIST_DIR = settings.BASE_DIR.parent / 'frontend' / 'dist'
+FRONTEND_DIR = FRONTEND_DIST_DIR if FRONTEND_DIST_DIR.exists() else (settings.BASE_DIR.parent / 'frontend')
+
+
+def serve_spa(request, path=''):
+    target = FRONTEND_DIR / path if path else FRONTEND_DIR / 'index.html'
+    if path and target.exists() and target.is_file():
+        return serve(request, path, document_root=FRONTEND_DIR)
+    return serve(request, 'index.html', document_root=FRONTEND_DIR)
+
 
 urlpatterns = [
-    path('', lambda request: serve(request, 'index.html', document_root=FRONTEND_DIR), name='frontend_root'),
     path('admin/', admin.site.urls),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
@@ -26,7 +34,8 @@ urlpatterns = [
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-# Serve frontend HTML, CSS, and JS files directly on port 8000 as well
+# Serve built React SPA assets & client-side routes
 urlpatterns += [
-    re_path(r'^(?P<path>(?:[\w\-]+\.html|css/.*|js/.*))$', serve, {'document_root': FRONTEND_DIR}),
+    re_path(r'^(?P<path>assets/.*)$', serve, {'document_root': FRONTEND_DIR}),
+    re_path(r'^(?!api/|admin/|media/|static/)(?P<path>.*)$', serve_spa, name='spa_fallback'),
 ]

@@ -1,7 +1,10 @@
 import csv
+import uuid
+from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import views, status, response
 from apps.accounts.models import User, UserRole
 from apps.accounts.permissions import IsRecruiter
@@ -18,15 +21,33 @@ from .serializers import InterviewTemplateSerializer, InterviewSessionSerializer
 from .question_bank import get_questions_for_interview
 
 
+def _safe_csv_cell(val):
+    """Prevents CSV formula injection in spreadsheet tools."""
+    s = '' if val is None else str(val)
+    if s and s[0] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + s
+    return s
+
+
 def _authorized_recruiter_sessions(user):
     """
     Privacy enforcement: Recruiters never automatically see a candidate's private practice mocks.
     They only see sessions assigned by a recruiter OR explicitly shared by the candidate.
     """
-    qs = InterviewSession.objects.select_related('candidate', 'template').prefetch_related('questions', 'answers')
+    qs = (
+        InterviewSession.objects.select_related('candidate', 'template', 'evaluation')
+        .prefetch_related('questions', 'answers')
+    )
     if user.role == UserRole.ADMIN:
         return qs.order_by('-created_at')
     return qs.filter(Q(is_recruiter_assigned=True) | Q(shared_with_recruiters=True)).order_by('-created_at')
+
+
+def _get_session_eval(session):
+    try:
+        return session.evaluation
+    except Evaluation.DoesNotExist:
+        return None
 
 
 class RecruiterCandidatesView(views.APIView):
@@ -34,6 +55,11 @@ class RecruiterCandidatesView(views.APIView):
 
     def get(self, request):
         sessions = _authorized_recruiter_sessions(request.user)
+        search_q = (request.query_params.get('q') or '').strip().lower()
+        domain_filter = (request.query_params.get('domain') or '').strip()
+        tier_filter = (request.query_params.get('tier') or '').strip()
+        flagged_only = (request.query_params.get('flagged') or '').strip().lower() in ('1', 'true', 'yes')
+
         candidate_roster = []
         total_score_accum = 0.0
         scored_count = 0
@@ -41,7 +67,7 @@ class RecruiterCandidatesView(views.APIView):
         flagged_count = 0
 
         for s in sessions:
-            eval_record = Evaluation.objects.filter(session=s).first()
+            eval_record = _get_session_eval(s)
             if eval_record:
                 total_score_accum += eval_record.overall_score
                 scored_count += 1
@@ -49,6 +75,19 @@ class RecruiterCandidatesView(views.APIView):
                 shortlisted_count += 1
             if s.proctoring_flagged or s.recruiter_status == RecruiterReviewStatus.FLAGGED:
                 flagged_count += 1
+
+            cand_name = (s.candidate.full_name if s.candidate and s.candidate.full_name else (s.candidate.email if s.candidate else 'Unknown'))
+            cand_email = s.candidate.email if s.candidate else ''
+            rating_band = eval_record.rating_band if eval_record else 'Pending'
+
+            if search_q and search_q not in cand_name.lower() and search_q not in cand_email.lower():
+                continue
+            if domain_filter and domain_filter != 'all' and s.domain != domain_filter:
+                continue
+            if tier_filter and tier_filter != 'all' and rating_band != tier_filter:
+                continue
+            if flagged_only and not (s.proctoring_flagged or s.recruiter_status == RecruiterReviewStatus.FLAGGED):
+                continue
 
             answers = list(s.answers.all())
             avg_wpm = round(sum(a.wpm for a in answers) / len(answers)) if answers else 0
@@ -62,13 +101,13 @@ class RecruiterCandidatesView(views.APIView):
                 'communication': eval_record.communication_score if eval_record else None,
                 'confidence': eval_record.confidence_score if eval_record else None,
                 'professionalism': eval_record.professionalism_score if eval_record else None,
-                'rating_band': eval_record.rating_band if eval_record else 'Pending',
+                'rating_band': rating_band,
             }
 
             candidate_roster.append({
                 'session_id': str(s.id),
-                'candidate_name': (s.candidate.full_name if s.candidate and s.candidate.full_name else (s.candidate.email if s.candidate else 'Unknown')),
-                'candidate_email': s.candidate.email if s.candidate else '',
+                'candidate_name': cand_name,
+                'candidate_email': cand_email,
                 'domain': s.domain,
                 'difficulty': s.difficulty,
                 'target_role': f"{s.domain} ({s.difficulty})",
@@ -151,7 +190,7 @@ class RecruiterAssignAssessmentView(views.APIView):
     permission_classes = [IsRecruiter]
 
     def post(self, request):
-        candidate_email = (request.data.get('candidate_email') or '').strip().lower()
+        candidate_email = str(request.data.get('candidate_email') or '').strip().lower()
         template_id = request.data.get('template_id')
         deadline_str = request.data.get('deadline')
 
@@ -162,47 +201,79 @@ class RecruiterAssignAssessmentView(views.APIView):
         if not candidate:
             return response.Response({'error': f'No active candidate found with email {candidate_email}.'}, status=status.HTTP_404_NOT_FOUND)
 
-        template = InterviewTemplate.objects.filter(id=template_id).first() if template_id else None
-        domain = (request.data.get('domain') or (template.domain if template else 'Software Engineering')).strip()
-        category = (request.data.get('category') or (template.category if template else 'Technical')).strip()
-        difficulty = (request.data.get('difficulty') or (template.level if template else 'Mid-Level')).strip()
-        duration = int(request.data.get('duration_minutes') or (template.duration_minutes if template else 25))
-        q_count = int(request.data.get('question_count') or (template.question_count if template else 5))
+        template = None
+        if template_id:
+            try:
+                template = InterviewTemplate.objects.filter(id=template_id, is_active=True).first()
+            except ValueError:
+                return response.Response({'error': 'Invalid template_id format.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not template:
+                return response.Response({'error': 'Assessment template not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        domain = str(request.data.get('domain') or (template.domain if template else 'Software Engineering')).strip()[:100]
+        category = str(request.data.get('category') or (template.category if template else 'Technical')).strip()[:50]
+        difficulty = str(request.data.get('difficulty') or (template.level if template else 'Mid-Level')).strip()[:50]
+
+        try:
+            duration = max(5, min(int(request.data.get('duration_minutes') or (template.duration_minutes if template else 25)), 120))
+            q_count = max(1, min(int(request.data.get('question_count') or (template.question_count if template else 5)), 20))
+        except (TypeError, ValueError):
+            return response.Response({'error': 'duration_minutes and question_count must be valid integers.'}, status=status.HTTP_400_BAD_REQUEST)
+
         skills = request.data.get('focus_skills') or (template.target_skills if template else [])
+        if isinstance(skills, str):
+            skills = [s.strip() for s in skills.split(',') if s.strip()]
+        elif isinstance(skills, list):
+            skills = [str(s).strip() for s in skills if str(s).strip()][:20]
+        else:
+            skills = []
 
         deadline = None
         if deadline_str:
-            try:
-                deadline = timezone.datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
-            except ValueError:
-                pass
+            parsed = parse_datetime(str(deadline_str).strip())
+            if not parsed:
+                return response.Response({'error': 'Invalid deadline ISO datetime format.'}, status=status.HTTP_400_BAD_REQUEST)
+            if timezone.is_naive(parsed):
+                parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+            deadline = parsed
 
-        session = InterviewSession.objects.create(
-            candidate=candidate,
-            assigned_by=request.user,
-            template=template,
-            domain=domain,
-            category=category,
-            difficulty=difficulty,
-            duration_minutes=duration,
-            focus_skills=skills,
-            total_questions=q_count,
-            status=InterviewStatus.READY,
-            is_recruiter_assigned=True,
-            deadline=deadline,
-        )
-
-        questions = get_questions_for_interview(domain=domain, category=category, difficulty=difficulty, count=q_count, focus_skills=skills, user_email=request.user.email)
-        for idx, q in enumerate(questions, start=1):
-            InterviewQuestion.objects.create(
-                session=session,
-                order=idx,
-                category=q.get('category', category),
-                competency=q.get('competency', domain),
-                prompt=q['prompt'],
-                expected_keywords=q.get('expected_keywords', []),
-                model_answer=q.get('model_answer', ''),
+        with transaction.atomic():
+            session = InterviewSession.objects.create(
+                candidate=candidate,
+                assigned_by=request.user,
+                template=template,
+                domain=domain,
+                category=category,
+                difficulty=difficulty,
+                duration_minutes=duration,
+                focus_skills=skills,
+                total_questions=q_count,
+                status=InterviewStatus.READY,
+                is_recruiter_assigned=True,
+                deadline=deadline,
             )
+
+            questions = get_questions_for_interview(
+                domain=domain,
+                category=category,
+                difficulty=difficulty,
+                count=q_count,
+                focus_skills=skills,
+                user_email=request.user.email,
+            )
+            for idx, q in enumerate(questions, start=1):
+                InterviewQuestion.objects.create(
+                    session=session,
+                    order=idx,
+                    category=q.get('category', category),
+                    competency=q.get('competency', domain),
+                    prompt=q['prompt'],
+                    expected_keywords=q.get('expected_keywords', []),
+                    model_answer=q.get('model_answer', ''),
+                )
+            if len(questions) != q_count:
+                session.total_questions = len(questions)
+                session.save(update_fields=['total_questions'])
 
         log_audit_event(
             'ASSESSMENT_ASSIGNED',
@@ -223,14 +294,21 @@ class RecruiterCompareView(views.APIView):
 
     def get(self, request):
         ids_param = request.query_params.get('session_ids', '')
-        session_ids = [s.strip() for s in ids_param.split(',') if s.strip()]
-        if len(session_ids) < 2:
+        raw_ids = [s.strip() for s in ids_param.split(',') if s.strip()]
+        if len(raw_ids) < 2:
             return response.Response({'error': 'Provide at least 2 session_ids separated by comma.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        authorized = _authorized_recruiter_sessions(request.user).filter(id__in=session_ids[:4])
+        valid_ids = []
+        for sid in raw_ids[:4]:
+            try:
+                valid_ids.append(str(uuid.UUID(sid)))
+            except ValueError:
+                return response.Response({'error': f'Invalid UUID in session_ids: {sid}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        authorized = _authorized_recruiter_sessions(request.user).filter(id__in=valid_ids)
         compared = []
         for s in authorized:
-            ev = Evaluation.objects.filter(session=s).first()
+            ev = _get_session_eval(s)
             compared.append({
                 'session_id': str(s.id),
                 'candidate_name': s.candidate.full_name if s.candidate else 'Candidate',
@@ -260,21 +338,21 @@ class RecruiterExportCsvView(views.APIView):
         writer.writerow(['Session ID', 'Candidate Name', 'Email', 'Domain', 'Difficulty', 'Status', 'Review Status', 'Overall Score', 'Rating Band', 'Technical', 'Communication', 'Confidence', 'Professionalism'])
 
         for s in sessions:
-            ev = Evaluation.objects.filter(session=s).first()
+            ev = _get_session_eval(s)
             writer.writerow([
-                str(s.id),
-                s.candidate.full_name if s.candidate else '',
-                s.candidate.email if s.candidate else '',
-                s.domain,
-                s.difficulty,
-                s.status,
-                s.recruiter_status,
-                ev.overall_score if ev else '',
-                ev.rating_band if ev else '',
-                ev.technical_relevance_score if ev else '',
-                ev.communication_score if ev else '',
-                ev.confidence_score if ev else '',
-                ev.professionalism_score if ev else '',
+                _safe_csv_cell(str(s.id)),
+                _safe_csv_cell(s.candidate.full_name if s.candidate else ''),
+                _safe_csv_cell(s.candidate.email if s.candidate else ''),
+                _safe_csv_cell(s.domain),
+                _safe_csv_cell(s.difficulty),
+                _safe_csv_cell(s.status),
+                _safe_csv_cell(s.recruiter_status),
+                _safe_csv_cell(ev.overall_score if ev else ''),
+                _safe_csv_cell(ev.rating_band if ev else ''),
+                _safe_csv_cell(ev.technical_relevance_score if ev else ''),
+                _safe_csv_cell(ev.communication_score if ev else ''),
+                _safe_csv_cell(ev.confidence_score if ev else ''),
+                _safe_csv_cell(ev.professionalism_score if ev else ''),
             ])
         return resp
 
@@ -283,7 +361,7 @@ class RecruiterTemplateView(views.APIView):
     permission_classes = [IsRecruiter]
 
     def get(self, request):
-        templates = InterviewTemplate.objects.filter(is_active=True).order_by('-created_at')
+        templates = InterviewTemplate.objects.select_related('created_by').filter(is_active=True).order_by('-created_at')
         return response.Response(InterviewTemplateSerializer(templates, many=True).data)
 
     def post(self, request):
@@ -303,3 +381,52 @@ class RecruiterTemplateView(views.APIView):
             )
             return response.Response(InterviewTemplateSerializer(template).data, status=status.HTTP_201_CREATED)
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RecruiterTemplateDetailView(views.APIView):
+    permission_classes = [IsRecruiter]
+
+    def _get_template(self, pk):
+        try:
+            return InterviewTemplate.objects.get(id=pk, is_active=True)
+        except (InterviewTemplate.DoesNotExist, ValueError):
+            return None
+
+    def get(self, request, pk):
+        tpl = self._get_template(pk)
+        if not tpl:
+            return response.Response({'error': 'Template not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return response.Response(InterviewTemplateSerializer(tpl).data)
+
+    def patch(self, request, pk):
+        tpl = self._get_template(pk)
+        if not tpl:
+            return response.Response({'error': 'Template not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if tpl.created_by_id != request.user.id and request.user.role != UserRole.ADMIN:
+            return response.Response({'error': 'Only the template author or an admin can modify this template.'}, status=status.HTTP_403_FORBIDDEN)
+
+        data = request.data.copy()
+        if isinstance(data.get('target_skills'), str):
+            data['target_skills'] = [s.strip() for s in data['target_skills'].split(',') if s.strip()]
+        serializer = InterviewTemplateSerializer(tpl, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return response.Response(serializer.data)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        tpl = self._get_template(pk)
+        if not tpl:
+            return response.Response({'error': 'Template not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if tpl.created_by_id != request.user.id and request.user.role != UserRole.ADMIN:
+            return response.Response({'error': 'Only the template author or an admin can delete this template.'}, status=status.HTTP_403_FORBIDDEN)
+        tpl.is_active = False
+        tpl.save(update_fields=['is_active'])
+        log_audit_event(
+            'TEMPLATE_ARCHIVED',
+            f"Recruiter {request.user.email} archived template '{tpl.title}'.",
+            level='INFO',
+            user_email=request.user.email,
+            request=request,
+        )
+        return response.Response({'message': 'Template archived successfully.'})

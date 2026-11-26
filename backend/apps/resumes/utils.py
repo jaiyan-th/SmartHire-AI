@@ -7,12 +7,57 @@ import docx
 MAX_RESUME_BYTES = 10 * 1024 * 1024  # 10 MB
 
 TECHNICAL_SKILLS_TAXONOMY = {
-    'languages': ['Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'SQL', 'Go', 'Rust', 'HTML5', 'CSS3', 'HTML', 'CSS'],
-    'frameworks': ['Django', 'React', 'Node.js', 'FastAPI', 'Express', 'Flask', 'Spring Boot', 'Next.js', 'Tailwind CSS', 'Angular', 'Vue'],
-    'databases': ['PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'SQLite', 'Firebase', 'Cassandra', 'DynamoDB'],
-    'tools': ['Git', 'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'Linux', 'CI/CD', 'GitHub Actions', 'Postman', 'Jira', 'Terraform'],
-    'concepts': ['REST API', 'Data Structures', 'Algorithms', 'OOP', 'Microservices', 'System Design', 'Agile', 'Machine Learning', 'LLM']
+    'languages': [
+        'Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'SQL',
+        'Go', 'Rust', 'HTML5', 'CSS3', 'HTML', 'CSS', 'Bash',
+    ],
+    'frameworks': [
+        'Django', 'React', 'Node.js', 'FastAPI', 'Express', 'Flask',
+        'Spring Boot', 'Next.js', 'Tailwind CSS', 'Angular', 'Vue', 'Celery',
+        'PyTorch', 'TensorFlow', 'Scikit-Learn', 'Pandas', 'NumPy',
+    ],
+    'databases': [
+        'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'SQLite', 'Firebase',
+        'Cassandra', 'DynamoDB', 'Vector DB', 'Pinecone', 'pgvector',
+    ],
+    'tools': [
+        'Git', 'Docker', 'Kubernetes', 'AWS', 'Azure', 'GCP', 'Linux',
+        'CI/CD', 'GitHub Actions', 'Postman', 'Jira', 'Terraform', 'Helm',
+        'Prometheus', 'Grafana', 'Nginx', 'Kafka', 'Pytest', 'Jest', 'Selenium',
+    ],
+    'concepts': [
+        'REST API', 'GraphQL', 'gRPC', 'Data Structures', 'Algorithms', 'OOP',
+        'Microservices', 'System Design', 'Agile', 'Machine Learning', 'LLM',
+        'RAG', 'Embeddings', 'A/B Testing', 'Product Strategy', 'RICE', 'PRD', 'KPI',
+    ],
 }
+
+ROLE_BENCHMARKS = {
+    'ai': ['Python', 'LLM', 'RAG', 'PyTorch', 'Embeddings', 'Vector DB', 'FastAPI', 'Docker', 'REST API', 'Git', 'Evaluation', 'Prompt Engineering'],
+    'ml': ['Python', 'Machine Learning', 'PyTorch', 'Scikit-Learn', 'Pandas', 'NumPy', 'SQL', 'Docker', 'Git', 'REST API'],
+    'data': ['Python', 'SQL', 'PostgreSQL', 'Pandas', 'NumPy', 'Scikit-Learn', 'A/B Testing', 'Git', 'Statistics', 'Data Structures'],
+    'devops': ['Docker', 'Kubernetes', 'Linux', 'Terraform', 'AWS', 'CI/CD', 'GitHub Actions', 'Redis', 'Nginx', 'Prometheus', 'Git'],
+    'cloud': ['Docker', 'Kubernetes', 'AWS', 'Terraform', 'CI/CD', 'Linux', 'Microservices', 'PostgreSQL', 'Redis', 'Git'],
+    'product': ['Product Strategy', 'RICE', 'PRD', 'KPI', 'A/B Testing', 'Agile', 'SQL', 'Jira', 'REST API', 'LLM'],
+    'default': ['Python', 'JavaScript', 'SQL', 'Django', 'React', 'PostgreSQL', 'Redis', 'Git', 'Docker', 'REST API', 'Data Structures', 'OOP'],
+}
+
+
+def _get_role_benchmark_skills(target_role: str) -> list:
+    role_lower = (target_role or '').lower()
+    if any(k in role_lower for k in ['ai', 'llm', 'generative']):
+        return ROLE_BENCHMARKS['ai']
+    if any(k in role_lower for k in ['ml', 'machine learning']):
+        return ROLE_BENCHMARKS['ml']
+    if 'data' in role_lower:
+        return ROLE_BENCHMARKS['data']
+    if any(k in role_lower for k in ['devops', 'sre', 'platform']):
+        return ROLE_BENCHMARKS['devops']
+    if 'cloud' in role_lower:
+        return ROLE_BENCHMARKS['cloud']
+    if 'product' in role_lower or 'pm' in role_lower.split():
+        return ROLE_BENCHMARKS['product']
+    return ROLE_BENCHMARKS['default']
 
 
 def validate_and_extract_text(file_bytes: bytes, filename: str) -> str:
@@ -72,12 +117,17 @@ def validate_and_extract_text(file_bytes: bytes, filename: str) -> str:
         raise ValueError('Unsupported file format. Allowed formats: .pdf, .docx, .txt')
 
 
-def _extract_section_lines(text: str, heading_keywords: list, limit: int = 4) -> list:
+def _extract_section_lines(text: str, heading_keywords: list, limit: int = 5) -> list:
     """Extracts genuine bullet/content lines following a recognized resume section heading."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     results = []
     in_section = False
-    stop_headings = {'skills', 'technical skills', 'education', 'experience', 'work experience', 'internships', 'projects', 'certifications', 'achievements', 'summary', 'objective'}
+    stop_headings = {
+        'skills', 'technical skills', 'education', 'academic', 'experience',
+        'work experience', 'employment', 'internships', 'projects',
+        'key projects', 'certifications', 'certificates', 'achievements',
+        'summary', 'objective',
+    }
 
     for line in lines:
         normalized = re.sub(r'[:\-–—]+$', '', line).strip().lower()
@@ -85,7 +135,7 @@ def _extract_section_lines(text: str, heading_keywords: list, limit: int = 4) ->
             in_section = True
             continue
         if in_section:
-            if normalized in stop_headings:
+            if any(normalized == h or normalized.startswith(h + ' ') for h in stop_headings):
                 break
             if len(line) > 8:
                 results.append(line.lstrip('•-* '))
@@ -111,7 +161,6 @@ def analyze_resume_text(text: str, target_role: str = 'Software Engineer', job_d
 
     all_extracted = [s for sublist in found_skills.values() for s in sublist]
 
-    # Determine benchmark skills: from JD if provided, else role default
     jd_lower = (job_description or '').lower()
     jd_skills = []
     if jd_lower.strip():
@@ -121,21 +170,16 @@ def analyze_resume_text(text: str, target_role: str = 'Software Engineer', job_d
                 if re.search(pattern, jd_lower) and skill not in jd_skills:
                     jd_skills.append(skill)
 
-    if jd_skills:
-        benchmark_skills = jd_skills
-    else:
-        benchmark_skills = ['Python', 'JavaScript', 'SQL', 'Django', 'React', 'PostgreSQL', 'Redis', 'Git', 'Docker', 'REST API', 'Data Structures', 'OOP']
+    benchmark_skills = jd_skills if jd_skills else _get_role_benchmark_skills(target_role)
+    extracted_lower = {s.lower() for s in all_extracted}
+    matched_benchmark = [s for s in benchmark_skills if s.lower() in extracted_lower]
+    missing_skills = [s for s in benchmark_skills if s.lower() not in extracted_lower]
 
-    matched_benchmark = [s for s in benchmark_skills if s in all_extracted]
-    missing_skills = [s for s in benchmark_skills if s not in all_extracted]
-
-    # Authentic section parsing (only report what is actually found in the text)
     exp_lines = _extract_section_lines(text, ['experience', 'work experience', 'employment', 'internships'])
     edu_lines = _extract_section_lines(text, ['education', 'academic', 'qualification', 'qualifications'])
     proj_lines = _extract_section_lines(text, ['projects', 'key projects', 'personal projects'])
     cert_lines = _extract_section_lines(text, ['certifications', 'certificates', 'licenses'])
 
-    # Deterministic ATS match score
     benchmark_ratio = len(matched_benchmark) / max(len(benchmark_skills), 1)
     skill_points = round(benchmark_ratio * 55)
     breadth_points = min(len(all_extracted) * 2, 15)

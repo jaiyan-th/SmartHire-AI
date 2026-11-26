@@ -4,7 +4,7 @@ from rest_framework import views, status, response, permissions
 from apps.core.audit import log_audit_event
 from .models import Resume, ResumeProcessingStatus
 from .serializers import ResumeSerializer
-from .utils import validate_and_extract_text
+from .utils import MAX_RESUME_BYTES, validate_and_extract_text
 from .tasks import process_resume_task
 
 
@@ -13,11 +13,16 @@ class AnalyzeResumeView(views.APIView):
 
     def post(self, request):
         uploaded_file = request.FILES.get('resume')
-        target_role = (request.data.get('target_role') or 'Full Stack Software Engineer').strip()[:150]
-        job_description = (request.data.get('job_description') or '').strip()
-        raw_text_input = (request.data.get('raw_text') or '').strip()
+        target_role = str(request.data.get('target_role') or 'Full Stack Software Engineer').strip()[:150]
+        job_description = str(request.data.get('job_description') or '').strip()[:15000]
+        raw_text_input = str(request.data.get('raw_text') or '').strip()
 
         if uploaded_file:
+            if getattr(uploaded_file, 'size', 0) > MAX_RESUME_BYTES:
+                return response.Response(
+                    {'error': 'File size exceeds the 10 MB limit.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             safe_name = os.path.basename(uploaded_file.name)[:200]
             file_bytes = uploaded_file.read()
             file_size = len(file_bytes)
@@ -44,7 +49,6 @@ class AnalyzeResumeView(views.APIView):
             target_role=target_role,
         )
 
-        # Dispatch via Celery (or run eagerly without touching Redis broker in local dev/test)
         if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', True):
             process_resume_task.apply(args=[str(resume_obj.id), job_description])
         else:

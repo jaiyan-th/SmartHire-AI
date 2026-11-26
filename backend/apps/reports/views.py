@@ -1,5 +1,9 @@
+import hashlib
+import hmac
 import io
+import uuid
 from xml.sax.saxutils import escape
+from django.conf import settings
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import views, status, response, permissions
@@ -10,12 +14,24 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from apps.evaluations.models import Evaluation
 
 
+def compute_dossier_digest(eval_record) -> str:
+    """Computes a deterministic HMAC-SHA256 verification digest for tamper-resistant dossiers."""
+    payload = f"{eval_record.session_id}:{eval_record.overall_score}:{eval_record.created_at.isoformat()}".encode('utf-8')
+    sig = hmac.new(settings.SECRET_KEY.encode('utf-8'), payload, hashlib.sha256).hexdigest()
+    return sig[:12].upper()
+
+
 class DownloadPdfReportView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         session_id = request.query_params.get('session_id')
         if session_id:
+            try:
+                uuid.UUID(str(session_id))
+            except ValueError:
+                return response.Response({'error': 'Invalid session_id format.'}, status=status.HTTP_400_BAD_REQUEST)
+
             eval_record = Evaluation.objects.select_related('session', 'session__candidate').filter(session_id=session_id).first()
             if not eval_record:
                 return response.Response({'error': 'Evaluation report not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -38,6 +54,7 @@ class DownloadPdfReportView(views.APIView):
         candidate_name = candidate.full_name or candidate.email if candidate else 'Candidate'
         candidate_email = candidate.email if candidate else ''
         verification_id = f"SH-{str(session.id)[:8].upper()}"
+        digest = compute_dossier_digest(eval_record)
         eval_date = eval_record.created_at.strftime('%B %d, %Y (%H:%M UTC)')
         proctor_status = 'FLAGGED FOR REVIEW' if session.proctoring_flagged else 'CLEARED'
 
@@ -51,7 +68,10 @@ class DownloadPdfReportView(views.APIView):
         body_style = ParagraphStyle('DocBody', parent=styles['Normal'], fontSize=9.5, leading=13.5, textColor=colors.HexColor('#2d2b38'))
 
         story.append(Paragraph("SMARTHIRE AI — CANDIDATE ASSESSMENT DOSSIER", title_style))
-        story.append(Paragraph(f"Verification ID: {escape(verification_id)} | Generated: {timezone.now().strftime('%Y-%m-%d %H:%M UTC')}", subtitle_style))
+        story.append(Paragraph(
+            f"Verification ID: {escape(verification_id)} | HMAC Digest: {escape(digest)} | Generated: {timezone.now().strftime('%Y-%m-%d %H:%M UTC')}",
+            subtitle_style,
+        ))
         story.append(Spacer(1, 14))
 
         meta_data = [
@@ -127,4 +147,38 @@ class DownloadPdfReportView(views.APIView):
         buffer.seek(0)
         response_pdf = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response_pdf['Content-Disposition'] = f'attachment; filename="SmartHire_Dossier_{verification_id}.pdf"'
+        response_pdf['X-Dossier-Digest'] = digest
         return response_pdf
+
+
+class VerifyDossierView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        eval_record = Evaluation.objects.select_related('session', 'session__candidate').filter(session_id=pk).first()
+        if not eval_record:
+            return response.Response({'verified': False, 'error': 'Evaluation record not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        session = eval_record.session
+        is_owner = session.candidate_id == request.user.id
+        is_authorized_recruiter = (
+            request.user.role in ('recruiter', 'admin')
+            and (session.is_recruiter_assigned or session.shared_with_recruiters or request.user.role == 'admin')
+        )
+        if not (is_owner or is_authorized_recruiter):
+            return response.Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+        expected_digest = compute_dossier_digest(eval_record)
+        provided_digest = (request.query_params.get('digest') or '').strip().upper()
+        matches = (not provided_digest) or hmac.compare_digest(expected_digest, provided_digest)
+
+        return response.Response({
+            'verified': matches,
+            'verification_id': f"SH-{str(session.id)[:8].upper()}",
+            'digest': expected_digest,
+            'candidate_name': session.candidate.full_name if session.candidate else 'Candidate',
+            'domain': session.domain,
+            'overall_score': eval_record.overall_score,
+            'rating_band': eval_record.rating_band,
+            'evaluated_at': eval_record.created_at.isoformat(),
+        })

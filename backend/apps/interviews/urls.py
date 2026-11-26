@@ -2,6 +2,8 @@ from django.urls import path
 from .views import (
     StartInterviewView,
     SessionDetailView,
+    CancelInterviewView,
+    ProctoringTelemetryView,
     SubmitAnswerView,
     FinishInterviewView,
     ShareSessionView,
@@ -19,6 +21,10 @@ urlpatterns = [
     path('history/', InterviewHistoryView.as_view(), name='interview_history_slash'),
     path('<uuid:pk>', SessionDetailView.as_view(), name='interview_detail'),
     path('<uuid:pk>/', SessionDetailView.as_view(), name='interview_detail_slash'),
+    path('<uuid:pk>/cancel', CancelInterviewView.as_view(), name='interview_cancel'),
+    path('<uuid:pk>/cancel/', CancelInterviewView.as_view(), name='interview_cancel_slash'),
+    path('<uuid:pk>/telemetry', ProctoringTelemetryView.as_view(), name='interview_telemetry'),
+    path('<uuid:pk>/telemetry/', ProctoringTelemetryView.as_view(), name='interview_telemetry_slash'),
     path('<uuid:pk>/share', ShareSessionView.as_view(), name='interview_share'),
     path('<uuid:pk>/share/', ShareSessionView.as_view(), name='interview_share_slash'),
 ]

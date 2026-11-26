@@ -9,6 +9,9 @@ from .views import (
     ForgotPasswordView,
     ResetPasswordView,
     VerifyEmailView,
+    ResendVerificationView,
+    AuthProvidersView,
+    BootstrapAdminView,
     ExportUserDataView,
 )
 
@@ -29,6 +32,12 @@ urlpatterns = [
     path('reset-password/', ResetPasswordView.as_view(), name='auth_reset_password_slash'),
     path('verify-email', VerifyEmailView.as_view(), name='auth_verify_email'),
     path('verify-email/', VerifyEmailView.as_view(), name='auth_verify_email_slash'),
+    path('resend-verification', ResendVerificationView.as_view(), name='auth_resend_verification'),
+    path('resend-verification/', ResendVerificationView.as_view(), name='auth_resend_verification_slash'),
+    path('providers', AuthProvidersView.as_view(), name='auth_providers'),
+    path('providers/', AuthProvidersView.as_view(), name='auth_providers_slash'),
+    path('bootstrap-admin', BootstrapAdminView.as_view(), name='auth_bootstrap_admin'),
+    path('bootstrap-admin/', BootstrapAdminView.as_view(), name='auth_bootstrap_admin_slash'),
     path('export-data', ExportUserDataView.as_view(), name='auth_export_data'),
     path('export-data/', ExportUserDataView.as_view(), name='auth_export_data_slash'),
     path('refresh', TokenRefreshView.as_view(), name='token_refresh'),

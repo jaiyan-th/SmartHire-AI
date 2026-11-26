@@ -56,25 +56,23 @@ jobs:
           python backend/manage.py test tests --verbosity=2
 
   frontend-check:
-    name: Frontend Accessibility & Static Verification
+    name: Frontend Typecheck & Production Build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Verify Required HTML and JS Assets Exist
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & Build Frontend
+        working-directory: frontend
         run: |
-          test -f frontend/index.html
-          test -f frontend/home.html
-          test -f frontend/interview.html
-          test -f frontend/resume.html
-          test -f frontend/skill-gap.html
-          test -f frontend/insights.html
-          test -f frontend/recruiter.html
-          test -f frontend/admin.html
-          test -f frontend/report-download.html
-          test -f frontend/css/styles.css
-          test -f frontend/js/api-v2.js
-          test -f frontend/js/app.js
-          echo "All 9 production pages and core modules verified."
+          npm ci
+          npm run typecheck
+          npm run build
