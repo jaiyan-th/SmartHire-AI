@@ -4,6 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from apps.core.views import LiveHealthView, ReadyHealthView
 
 FRONTEND_DIST_DIR = settings.BASE_DIR.parent / 'frontend' / 'dist'
 FRONTEND_DIR = FRONTEND_DIST_DIR if FRONTEND_DIST_DIR.exists() else (settings.BASE_DIR.parent / 'frontend')
@@ -17,6 +18,12 @@ def serve_spa(request, path=''):
 
 
 urlpatterns = [
+    # Top-level Orchestrator & Cloud Platform Health Probes (K8s / ALB / Render / Fly)
+    path('health', ReadyHealthView.as_view(), name='root_health'),
+    path('healthz', ReadyHealthView.as_view(), name='root_healthz'),
+    path('livez', LiveHealthView.as_view(), name='root_livez'),
+    path('readyz', ReadyHealthView.as_view(), name='root_readyz'),
+
     path('admin/', admin.site.urls),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

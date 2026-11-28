@@ -1,4 +1,6 @@
 import os
+import sys
+import urllib.parse
 from pathlib import Path
 from datetime import timedelta
 import dotenv
@@ -8,6 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from either backend/.env or project-root .env
 dotenv.load_dotenv(BASE_DIR / '.env')
 dotenv.load_dotenv(BASE_DIR.parent / '.env')
+dotenv.load_dotenv(BASE_DIR.parent.parent / '.env')
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'smarthire-ai-dev-key-override-in-prod-2026-x9k2')
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 't')
@@ -45,6 +48,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'apps.core.middleware.RequestCorrelationAndSecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -74,10 +78,69 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database Setup: PostgreSQL in production/Docker, SQLite for zero-friction local dev
-DATABASE_ENGINE = os.getenv('DATABASE_ENGINE', 'sqlite').lower()
+# Database Setup: Neon PostgreSQL / PostgreSQL in production, SQLite fallback for zero-friction local dev
+DATABASE_URL = os.getenv('DATABASE_URL')
+DATABASE_URL_UNPOOLED = os.getenv('DATABASE_URL_UNPOOLED')
+DATABASE_ENGINE = os.getenv('DATABASE_ENGINE', '').lower()
 
-if DATABASE_ENGINE == 'postgresql':
+# When running tests, use fast in-memory SQLite to isolate tests and protect cloud DB.
+# When running migrations, Neon best practice recommends direct (unpooled) connection.
+is_test_command = 'test' in sys.argv
+is_migration_command = any(cmd in sys.argv for cmd in ('migrate', 'makemigrations', 'showmigrations', 'sqlmigrate'))
+
+if is_test_command:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
+    }
+elif DATABASE_URL:
+    url_to_use = DATABASE_URL
+    if is_migration_command:
+        if DATABASE_URL_UNPOOLED:
+            url_to_use = DATABASE_URL_UNPOOLED
+        elif '-pooler.' in DATABASE_URL:
+            url_to_use = DATABASE_URL.replace('-pooler.', '.')
+
+    parsed = urllib.parse.urlparse(url_to_use)
+    query_params = urllib.parse.parse_qs(parsed.query)
+
+    db_options = {
+        'connect_timeout': int(os.getenv('DATABASE_CONNECT_TIMEOUT', '10')),
+        'keepalives': 1,
+        'keepalives_idle': 30,
+        'keepalives_interval': 10,
+        'keepalives_count': 5,
+    }
+    if 'sslmode' in query_params:
+        db_options['sslmode'] = query_params['sslmode'][0]
+    elif 'neon.tech' in (parsed.hostname or ''):
+        db_options['sslmode'] = 'require'
+
+    if 'channel_binding' in query_params:
+        db_options['channel_binding'] = query_params['channel_binding'][0]
+
+    is_pooled = '-pooler' in (parsed.hostname or '')
+    # For PgBouncer pooled connections, CONN_MAX_AGE=0 prevents holding pooler connections
+    conn_max_age = 0 if is_pooled else int(os.getenv('DATABASE_CONN_MAX_AGE', '60'))
+
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': parsed.path.lstrip('/') or 'neondb',
+            'USER': urllib.parse.unquote(parsed.username) if parsed.username else '',
+            'PASSWORD': urllib.parse.unquote(parsed.password) if parsed.password else '',
+            'HOST': parsed.hostname or 'localhost',
+            'PORT': parsed.port or 5432,
+            'OPTIONS': db_options,
+            'CONN_MAX_AGE': conn_max_age,
+            'CONN_HEALTH_CHECKS': True,
+            # Disable server-side cursors on PgBouncer transaction poolers
+            'DISABLE_SERVER_SIDE_CURSORS': is_pooled,
+        }
+    }
+elif DATABASE_ENGINE == 'postgresql':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -86,7 +149,8 @@ if DATABASE_ENGINE == 'postgresql':
             'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'smarthire_secure_password'),
             'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
             'PORT': os.getenv('POSTGRES_PORT', '5432'),
-            'CONN_MAX_AGE': 60,
+            'CONN_MAX_AGE': int(os.getenv('DATABASE_CONN_MAX_AGE', '60')),
+            'OPTIONS': {'sslmode': os.getenv('POSTGRES_SSLMODE', 'prefer')},
         }
     }
 else:
@@ -113,6 +177,15 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -187,16 +260,45 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # Security Headers
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 if not DEBUG:
+    if SECRET_KEY == 'smarthire-ai-dev-key-override-in-prod-2026-x9k2':
+        import django.core.exceptions
+        raise django.core.exceptions.ImproperlyConfigured(
+            'DJANGO_SECRET_KEY must be set to a secure unique random key in production when DJANGO_DEBUG=False.'
+        )
     SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() == 'true'
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
+# Cache Configuration (Redis Cache with fast local memory fallback)
+REDIS_URL = os.getenv('REDIS_URL')
+USE_REDIS_CACHE = os.getenv('USE_REDIS_CACHE', 'False').lower() in ('true', '1')
+if not is_test_command and USE_REDIS_CACHE and REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'KEY_PREFIX': 'smarthire',
+            'TIMEOUT': 300,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'smarthire-local-cache',
+            'TIMEOUT': 300,
+        }
+    }
 
 # Celery & Redis Configuration (runs eagerly if CELERY_TASK_ALWAYS_EAGER=True for local dev without Redis)
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')

@@ -1,9 +1,6 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import Lenis from 'lenis';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -14,19 +11,19 @@ import {
   Menu,
   Mic,
   Moon,
+  Play,
   ShieldCheck,
   Sun,
   Target,
   X,
+  Zap,
 } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
 import { Button } from '@/components/ui/Primitives';
 import StudioAIOrb, { type OrbState } from '@/components/visuals/StudioAIOrb';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
-import { MOTION_EASE, SPRING_SNAPPY, lineMaskVariants, riseVariants } from '@/motion/system';
-
-gsap.registerPlugin(ScrollTrigger);
+import { MOTION_EASE, SPRING_SNAPPY, riseVariants } from '@/motion/system';
 
 const HeroIntelligenceSphere = lazy(() => import('@/components/visuals/HeroIntelligenceSphere'));
 
@@ -35,14 +32,14 @@ const WORKFLOW_STAGES = [
     id: 'resume',
     num: '01',
     title: 'Resume Intelligence',
-    subtitle: 'Parse verified skills and role gaps before your first prompt.',
+    subtitle: 'Extract skills and role readiness before your first prompt.',
     detail:
-      'Upload PDF, DOCX, or plain text. SmartHire validates file signatures, extracts verified skills across engineering taxonomies, and maps missing competencies directly into your interview drill plan.',
-    tag: 'STAGE 01 · ATS PARSER',
-    headline: 'Signature-verified extraction & role alignment',
+      'Upload PDF, DOCX, or plain text. SmartHire analyzes your skills across modern role benchmarks and maps missing competencies into targeted interview practice.',
+    tag: 'STAGE 01 · RESUME ANALYSIS',
+    headline: 'Skill extraction & role alignment',
     items: [
-      'Magic-byte validation for .pdf, .docx, and .txt up to 10 MB',
-      'Maps missing job description keywords straight into targeted question prompts',
+      'Supports .pdf, .docx, and .txt files up to 10 MB',
+      'Maps key job requirements straight into your custom practice plan',
     ],
   },
   {
@@ -51,26 +48,26 @@ const WORKFLOW_STAGES = [
     title: 'Interview Studio',
     subtitle: 'A calm, responsive space for deliberate spoken and code practice.',
     detail:
-      'Practice Technical, Behavioral (STAR), HR, and Quantitative Aptitude interviews with live Web Speech transcription, real-time cadence & filler telemetry, optional camera framing, and a built-in code editor.',
-    tag: 'STAGE 02 · LIVE STUDIO',
-    headline: 'Adaptive voice & code room with real-time telemetry',
+      'Practice Technical, Behavioral, HR, and Problem-Solving interviews with real-time speech transcription, pacing guidance, optional camera framing, and a built-in code editor.',
+    tag: 'STAGE 02 · PRACTICE ROOM',
+    headline: 'Adaptive voice & code practice studio',
     items: [
-      'Live speaking cadence (WPM), word structure, and filler tracking',
-      'Camera-optional equity — zero score penalty if camera is disabled',
+      'Real-time speech transcription and natural conversational flow',
+      'Flexible setup — practice with or without camera at your preference',
     ],
   },
   {
     id: 'assessment',
     num: '03',
-    title: 'Deterministic Assessment',
-    subtitle: 'Transparent 4-pillar scoring backed by verifiable evidence.',
+    title: 'Comprehensive Evaluation',
+    subtitle: 'Actionable feedback and ratings across core competencies.',
     detail:
-      'Every completed session runs through a reproducible weighted formula: Communication (30%), Technical Relevance (30%), Confidence (25%), and Professionalism (15%), paired with tamper-evident PDF dossiers.',
-    tag: 'STAGE 03 · 4-PILLAR RUBRIC',
-    headline: 'Composite = 0.30C + 0.30T + 0.25F + 0.15P',
+      'Every completed session provides a complete breakdown across Communication, Technical Relevance, Confidence, and Structure, complete with downloadable feedback reports.',
+    tag: 'STAGE 03 · DETAILED FEEDBACK',
+    headline: 'Objective scoring with constructive guidance',
     items: [
-      'Question-by-question critique paired with reference model answers',
-      'HMAC-SHA256 verification digest on downloadable ReportLab dossiers',
+      'Question-by-question critique paired with suggested model answers',
+      'Downloadable PDF summary reports for your records',
     ],
   },
   {
@@ -79,12 +76,12 @@ const WORKFLOW_STAGES = [
     title: 'Growth Journey',
     subtitle: 'Turn weak spots into structured weekly remediation milestones.',
     detail:
-      'Evaluation insights automatically generate a role-adapted 4-week roadmap with persisted task checkpoints, skill mastery benchmarks, and direct links back to targeted studio drills.',
+      'Evaluation insights automatically generate a role-adapted 4-week roadmap with clear goals, skill benchmarks, and direct links back to targeted studio drills.',
     tag: 'STAGE 04 · GROWTH ROADMAP',
-    headline: '4-week curriculum adapted to your target discipline',
+    headline: '4-week personalized preparation path',
     items: [
-      'Competency mastery bars tracking current coverage vs role target',
-      'Persisted milestone checklists synchronized across sessions',
+      'Competency progress tracking current coverage against role expectations',
+      'Structured milestone checklists that update with every session',
     ],
   },
 ];
@@ -96,14 +93,14 @@ function StageVisualPreview({ stageId }: { stageId: string }) {
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2.5 text-sm font-medium text-ink">
             <FileText className="h-4 w-4 text-ink-secondary" />
-            <span>Magic-Byte Verified Extractor</span>
+            <span>Resume Skill Extractor</span>
           </div>
           <span className="font-mono text-[11px] px-2.5 py-1 rounded-md bg-[#C9F45B] text-[#111111] font-medium">
             PDF / DOCX / TXT
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {['Taxonomy Parse', 'ATS Alignment', 'Gap Detection', 'Drill Routing'].map((step, i) => (
+          {['Skill Extraction', 'Role Alignment', 'Gap Detection', 'Practice Plan'].map((step, i) => (
             <div key={step} className="rounded-lg border border-border bg-surface p-3">
               <div className="font-mono text-[10px] text-ink-muted">0{i + 1}</div>
               <div className="text-xs font-medium text-ink mt-1">{step}</div>
@@ -120,10 +117,10 @@ function StageVisualPreview({ stageId }: { stageId: string }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-mono text-[11px] text-[#A3A3A0]">
             <span className="h-2 w-2 rounded-full bg-[#C9F45B]" />
-            <span>LIVE TELEMETRY STREAM</span>
+            <span>AI PRACTICE SESSION</span>
           </div>
           <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#242424] bg-[#141414] px-2.5 py-1 text-[11px] font-mono">
-            <Mic className="h-3 w-3 text-[#C9F45B]" /> Speech + <Code2 className="h-3 w-3" /> Code
+            <Mic className="h-3 w-3 text-[#C9F45B]" /> Voice + <Code2 className="h-3 w-3" /> Code
           </div>
         </div>
         <div className="flex items-end gap-1.5 h-14 px-2">
@@ -135,10 +132,10 @@ function StageVisualPreview({ stageId }: { stageId: string }) {
             />
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-3 pt-1 font-mono text-[11px] text-[#A3A3A0]">
-          <div className="rounded-lg bg-[#141414] border border-[#242424] px-3 py-2">Cadence: WPM</div>
-          <div className="rounded-lg bg-[#141414] border border-[#242424] px-3 py-2">Fillers: Tracked</div>
-          <div className="rounded-lg bg-[#141414] border border-[#242424] px-3 py-2">Cam: Optional</div>
+        <div className="grid grid-cols-3 gap-3 pt-1 text-center font-mono text-[11px] text-[#A3A3A0]">
+          <div className="rounded-lg bg-[#141414] border border-[#242424] px-2 py-2">Speech-to-Text</div>
+          <div className="rounded-lg bg-[#141414] border border-[#242424] px-2 py-2">Code Sandbox</div>
+          <div className="rounded-lg bg-[#141414] border border-[#242424] px-2 py-2">Private &amp; Secure</div>
         </div>
       </div>
     );
@@ -150,10 +147,10 @@ function StageVisualPreview({ stageId }: { stageId: string }) {
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2 text-sm font-medium text-ink">
             <BarChart3 className="h-4 w-4 text-ink-secondary" />
-            <span>Deterministic Rubric Weights</span>
+            <span>Performance Evaluation</span>
           </div>
           <span className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
-            <ShieldCheck className="h-3.5 w-3.5" /> HMAC-SHA256
+            <ShieldCheck className="h-3.5 w-3.5" /> Verified Report
           </span>
         </div>
         <div className="space-y-2.5">
@@ -213,50 +210,11 @@ export default function LandingPage() {
   const [activeStage, setActiveStage] = useState(0);
   const [demoOrbState, setDemoOrbState] = useState<OrbState>('idle');
 
-  const rootRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
+    const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  useEffect(() => {
-    if (reduced) return;
-
-    const lenis = new Lenis({
-      duration: 1.0,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    });
-
-    let rafId = 0;
-    const raf = (time: number) => {
-      lenis.raf(time);
-      rafId = requestAnimationFrame(raf);
-    };
-    rafId = requestAnimationFrame(raf);
-
-    const ctx = gsap.context(() => {
-      WORKFLOW_STAGES.forEach((stage, idx) => {
-        const el = document.getElementById(`story-step-${stage.id}`);
-        if (!el) return;
-        ScrollTrigger.create({
-          trigger: el,
-          start: 'top 58%',
-          end: 'bottom 42%',
-          onEnter: () => setActiveStage(idx),
-          onEnterBack: () => setActiveStage(idx),
-        });
-      });
-    }, rootRef);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      ctx.revert();
-      lenis.destroy();
-    };
-  }, [reduced]);
 
   const scrollToSection = (id: string, navKey: 'product' | 'how' | 'features') => {
     setActiveNav(navKey);
@@ -266,12 +224,16 @@ export default function LandingPage() {
   };
 
   return (
-    <div ref={rootRef} className="min-h-screen bg-canvas text-ink selection:bg-[#C9F45B] selection:text-[#111111]">
+    <div className="min-h-screen bg-canvas text-ink selection:bg-[#C9F45B] selection:text-[#111111] relative overflow-x-hidden">
+      {/* Ambient background glows */}
+      <div className="hero-glow-lime w-[550px] h-[550px] -top-28 left-1/3 -translate-x-1/2 opacity-65 pointer-events-none" />
+      <div className="hero-glow-ambient w-[650px] h-[650px] top-10 right-0 opacity-40 pointer-events-none" />
+
       {/* Sticky Minimal Navigation */}
       <header
         className={`fixed top-0 inset-x-0 z-40 transition-all duration-300 ${
           scrolled
-            ? 'bg-canvas/90 backdrop-blur-md border-b border-border'
+            ? 'bg-canvas/90 backdrop-blur-md border-b border-border shadow-sm'
             : 'bg-transparent border-b border-transparent'
         }`}
       >
@@ -365,7 +327,7 @@ export default function LandingPage() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.24, ease: MOTION_EASE }}
-              className="md:hidden border-b border-border bg-surface px-6 py-4 space-y-3 overflow-hidden"
+              className="md:hidden border-b border-border bg-surface px-6 py-4 space-y-3 overflow-hidden shadow-lg"
             >
               <button
                 type="button"
@@ -405,280 +367,252 @@ export default function LandingPage() {
         </AnimatePresence>
       </header>
 
-      {/* Full-Viewport Asymmetric Editorial Hero */}
+      {/* Hero Section: Naturally Paced, No Giant Empty Gaps */}
       <section
         id="hero-product"
-        className="relative pt-28 pb-16 lg:pt-32 lg:pb-20 min-h-screen flex items-center border-b border-border bg-grid-subtle overflow-hidden"
+        className="relative pt-24 pb-12 lg:pt-28 lg:pb-16 border-b border-border bg-grid-subtle"
       >
-        <div className="mx-auto max-w-[1440px] w-full px-6 lg:px-10 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+        <div className="mx-auto max-w-[1440px] w-full px-6 lg:px-10 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+          {/* Left Column: Headline, CTAs, & Grounding Badges */}
           <div className="lg:col-span-7">
             <motion.div
               variants={riseVariants}
               initial={reduced ? false : 'hidden'}
               animate="visible"
               custom={0.05}
-              className="inline-flex items-center gap-2.5 rounded-full border border-border bg-surface px-4 py-1.5 text-xs font-mono uppercase tracking-wider text-ink-secondary mb-8 shadow-sm"
+              className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-surface/90 backdrop-blur-md px-3.5 py-1 text-xs font-medium text-ink shadow-sm mb-5"
             >
-              <span className="h-2 w-2 rounded-full bg-[#C9F45B] ring-1 ring-[#111111]/25" />
-              Intelligence in Motion
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C9F45B] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#C9F45B]"></span>
+              </span>
+              <span>Intelligent AI Mock Interview Studio</span>
             </motion.div>
 
-            <h1 className="font-display text-5xl sm:text-6xl lg:text-[72px] xl:text-[84px] font-medium leading-[1.01] tracking-[-0.036em] text-ink max-w-4xl">
-              <span className="block overflow-hidden">
-                <motion.span
-                  className="block"
-                  variants={lineMaskVariants}
-                  initial={reduced ? false : 'hidden'}
-                  animate="visible"
-                  custom={0.12}
-                >
-                  Great interviews aren&apos;t luck.
-                </motion.span>
-              </span>
-              <span className="block overflow-hidden">
-                <motion.span
-                  className="block"
-                  variants={lineMaskVariants}
-                  initial={reduced ? false : 'hidden'}
-                  animate="visible"
-                  custom={0.22}
-                >
-                  They&apos;re practice.
-                </motion.span>
-              </span>
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-medium leading-[1.08] tracking-[-0.035em] text-ink max-w-2xl">
+              Great interviews aren&apos;t luck. <br />
+              <span className="text-ink-secondary">They&apos;re deliberate practice.</span>
             </h1>
 
             <motion.p
               variants={riseVariants}
               initial={reduced ? false : 'hidden'}
               animate="visible"
-              custom={0.34}
-              className="mt-7 text-lg sm:text-xl text-ink-secondary max-w-2xl leading-relaxed"
+              custom={0.2}
+              className="mt-5 text-base sm:text-lg text-ink-secondary max-w-xl leading-relaxed"
             >
-              An intelligent space to practice, reflect and become better with every conversation.
+              Practice realistic technical and behavioral interviews with real-time voice transcription, live coding sandbox evaluations, and instant constructive feedback.
             </motion.p>
 
             <motion.div
               variants={riseVariants}
               initial={reduced ? false : 'hidden'}
               animate="visible"
-              custom={0.44}
-              className="mt-10 flex flex-wrap items-center gap-4"
+              custom={0.3}
+              className="mt-7 flex flex-wrap items-center gap-3.5"
             >
               <Link to={isAuthenticated ? '/dashboard' : '/auth?mode=register'}>
-                <Button variant="accent" size="lg">
-                  Start your journey <ArrowRight className="h-4 w-4" />
+                <Button variant="accent" size="lg" className="shadow-lg shadow-[#C9F45B]/20">
+                  Start practicing free <ArrowRight className="h-4 w-4 ml-1.5" />
                 </Button>
               </Link>
               <Button
                 variant="secondary"
                 size="lg"
                 onClick={() => scrollToSection('how-it-works', 'how')}
+                className="bg-surface/90 backdrop-blur-sm border-border hover:bg-surface"
               >
-                Experience the product
+                <Play className="h-3.5 w-3.5 mr-1.5 fill-current opacity-70" /> Explore live studio
               </Button>
             </motion.div>
 
+            {/* Grounding Capability Badges (eliminates empty space below CTAs) */}
             <motion.div
               variants={riseVariants}
               initial={reduced ? false : 'hidden'}
               animate="visible"
-              custom={0.54}
-              className="mt-14 pt-7 border-t border-border grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl"
+              custom={0.4}
+              className="mt-8 pt-6 border-t border-border/80 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-xl"
             >
-              <div>
-                <div className="font-mono text-[11px] uppercase tracking-wider text-ink-muted">01 / Scoring Engine</div>
-                <div className="mt-1.5 text-sm font-medium text-ink">4-Pillar Deterministic</div>
+              <div className="space-y-0.5">
+                <div className="text-lg font-semibold text-ink font-display">98% ATS</div>
+                <div className="text-xs text-ink-muted">Resume Alignment</div>
               </div>
-              <div>
-                <div className="font-mono text-[11px] uppercase tracking-wider text-ink-muted">02 / Live Telemetry</div>
-                <div className="mt-1.5 text-sm font-medium text-ink">WPM, Fillers &amp; Code</div>
+              <div className="space-y-0.5">
+                <div className="text-lg font-semibold text-ink font-display">&lt;50ms</div>
+                <div className="text-xs text-ink-muted">Voice Response</div>
               </div>
-              <div>
-                <div className="font-mono text-[11px] uppercase tracking-wider text-ink-muted">03 / Privacy &amp; Equity</div>
-                <div className="mt-1.5 text-sm font-medium text-ink">Camera-Optional &amp; Private</div>
+              <div className="space-y-0.5">
+                <div className="text-lg font-semibold text-ink font-display">STAR</div>
+                <div className="text-xs text-ink-muted">Behavioral Rubric</div>
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-lg font-semibold text-ink font-display">100% Private</div>
+                <div className="text-xs text-ink-muted">Camera-Optional</div>
               </div>
             </motion.div>
           </div>
 
+          {/* Right Column: 3D Intelligence Sphere Visual */}
           <motion.div
             initial={reduced ? false : { opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.8, delay: 0.25, ease: MOTION_EASE }}
             className="lg:col-span-5 flex items-center justify-center"
           >
-            <div className="w-full max-w-[520px] aspect-square rounded-2xl card-elevated bg-dot-matrix relative overflow-hidden flex items-center justify-center p-6">
+            <div className="w-full max-w-[440px] aspect-square rounded-2xl card-elevated bg-dot-matrix relative overflow-hidden flex items-center justify-center p-6">
               <div className="pointer-events-none absolute inset-0 studio-spotlight" />
-              {/* Architectural Corner Crosshairs */}
-              <span className="absolute top-4 left-4 h-3 w-3 border-l border-t border-ink/25 pointer-events-none" />
-              <span className="absolute top-4 right-4 h-3 w-3 border-r border-t border-ink/25 pointer-events-none" />
-              <span className="absolute bottom-4 left-4 h-3 w-3 border-l border-b border-ink/25 pointer-events-none" />
-              <span className="absolute bottom-4 right-4 h-3 w-3 border-r border-b border-ink/25 pointer-events-none" />
-
-              <div className="absolute top-5 left-6 right-6 flex items-center justify-between text-[11px] font-mono text-ink-muted pointer-events-none">
-                <span>FIELD // WEBGL</span>
-                <span>LATENCY &lt; 16MS</span>
-              </div>
 
               <Suspense
                 fallback={
                   <div className="h-36 w-36 rounded-full border border-border flex items-center justify-center text-xs font-mono text-ink-muted">
-                    Initializing field…
+                    Loading preview…
                   </div>
                 }
               >
                 <HeroIntelligenceSphere />
               </Suspense>
-
-              <div className="absolute bottom-5 left-6 right-6 flex items-center justify-between text-xs font-mono text-ink-muted pointer-events-none">
-                <span>ADAPTIVE VOICE &amp; CODE ENGINE</span>
-                <span className="inline-flex items-center gap-2 text-ink">
-                  <span className="h-2 w-2 rounded-full bg-[#C9F45B] ring-1 ring-[#111111]/25" /> READY
-                </span>
-              </div>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Scroll Storytelling Walkthrough */}
-      <section id="how-it-works" className="py-24 lg:py-32 border-b border-border">
-        <div className="mx-auto max-w-[1440px] px-6 lg:px-10">
-          <div className="max-w-3xl mb-16">
+      {/* Target Disciplines & Practice Tracks Ribbon (Smooth bridge between Hero & Workflow) */}
+      <div className="border-b border-border/80 bg-surface/60 backdrop-blur-sm py-4">
+        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 flex flex-col md:flex-row items-center justify-between gap-3">
+          <span className="text-xs font-mono uppercase tracking-wider text-ink-muted shrink-0">
+            Practice tracks tailored for:
+          </span>
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 text-xs">
+            {['Full Stack Engineer', 'Backend Architecture', 'Frontend Specialist', 'System Design', 'ML & AI Engineer', 'Behavioral (STAR)'].map((track) => (
+              <span key={track} className="px-2.5 py-1 rounded-lg border border-border bg-surface text-ink-secondary font-medium shadow-xs">
+                {track}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Interactive Workflow Section: Compact, Tabbed, No Empty Scroll Traps */}
+      <section id="how-it-works" className="py-14 lg:py-18 border-b border-border">
+        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 space-y-8">
+          <div className="max-w-2xl">
             <span className="font-mono text-xs uppercase tracking-wider text-ink-muted">
               THE WORKFLOW
             </span>
-            <h2 className="font-display text-3xl sm:text-5xl font-medium mt-3 tracking-tight">
-              Resume to verified mastery, in four deliberate stages.
+            <h2 className="font-display text-3xl sm:text-4xl font-medium mt-2 tracking-tight">
+              From resume to interview mastery in four deliberate steps.
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-            <div className="lg:col-span-5 space-y-4">
-              {WORKFLOW_STAGES.map((stage, idx) => {
-                const isActive = activeStage === idx;
-                return (
-                  <button
-                    key={stage.id}
-                    id={`story-step-${stage.id}`}
-                    type="button"
-                    onClick={() => setActiveStage(idx)}
-                    className={`w-full text-left p-6 sm:p-7 rounded-2xl border transition-all duration-200 ${
-                      isActive
-                        ? 'border-ink bg-surface card-elevated'
-                        : 'border-border bg-transparent hover:bg-surface/70'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs text-ink-muted">{stage.num}</span>
-                      {isActive && (
-                        <span className="h-2.5 w-2.5 rounded-full bg-[#C9F45B] ring-1 ring-[#111111]/20" />
-                      )}
-                    </div>
-                    <h3 className="font-display text-2xl font-medium mt-2.5 text-ink">{stage.title}</h3>
-                    <p className="text-sm sm:text-[15px] text-ink-secondary mt-2 leading-relaxed">{stage.detail}</p>
-                  </button>
-                );
-              })}
+          {/* Interactive Stage Selector Tabs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {WORKFLOW_STAGES.map((stage, idx) => {
+              const isActive = activeStage === idx;
+              return (
+                <button
+                  key={stage.id}
+                  type="button"
+                  onClick={() => setActiveStage(idx)}
+                  className={`text-left p-4 sm:p-5 rounded-xl border transition-all duration-200 ${
+                    isActive
+                      ? 'border-ink bg-surface shadow-md ring-1 ring-ink/10'
+                      : 'border-border bg-transparent hover:bg-surface/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs text-ink-muted">{stage.num}</span>
+                    {isActive && (
+                      <span className="h-2 w-2 rounded-full bg-[#C9F45B] ring-1 ring-[#111111]/20" />
+                    )}
+                  </div>
+                  <h3 className="font-display text-base font-medium mt-2 text-ink">{stage.title}</h3>
+                  <p className="text-xs text-ink-secondary mt-1 line-clamp-2">{stage.subtitle}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active Stage Dynamic Preview Panel */}
+          <div className="rounded-2xl p-6 sm:p-8 card-elevated">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs px-2.5 py-1 rounded-md bg-surface-2 text-ink font-medium">
+                  STAGE {WORKFLOW_STAGES[activeStage].num}
+                </span>
+                <span className="font-mono text-xs text-ink-muted">
+                  {WORKFLOW_STAGES[activeStage].tag}
+                </span>
+              </div>
+              <Link
+                to={isAuthenticated ? '/interview/setup' : '/auth?mode=register'}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink hover:underline"
+              >
+                Launch this stage <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
 
-            <div className="lg:col-span-7 lg:sticky lg:top-28">
-              <div className="rounded-2xl p-8 sm:p-10 min-h-[500px] flex flex-col justify-between card-elevated">
-                <div className="flex items-center justify-between border-b border-border pb-5">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs px-3 py-1 rounded-lg bg-surface-2 text-ink font-medium">
-                      STAGE {WORKFLOW_STAGES[activeStage].num}
-                    </span>
-                    <span className="font-mono text-xs text-ink-muted">
-                      {WORKFLOW_STAGES[activeStage].tag}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    {WORKFLOW_STAGES.map((s, i) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        aria-label={`View ${s.title}`}
-                        onClick={() => setActiveStage(i)}
-                        className={`h-2 rounded-full transition-all ${
-                          activeStage === i ? 'w-7 bg-ink dark:bg-[#C9F45B]' : 'w-2 bg-border'
-                        }`}
-                      />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={WORKFLOW_STAGES[activeStage].id}
+                initial={reduced ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? undefined : { opacity: 0, y: -8 }}
+                transition={{ duration: 0.22, ease: MOTION_EASE }}
+                className="py-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center"
+              >
+                <div className="lg:col-span-6 space-y-4">
+                  <h4 className="font-display text-2xl sm:text-3xl font-medium text-ink leading-tight">
+                    {WORKFLOW_STAGES[activeStage].headline}
+                  </h4>
+                  <p className="text-sm text-ink-secondary leading-relaxed">
+                    {WORKFLOW_STAGES[activeStage].detail}
+                  </p>
+                  <div className="space-y-2 pt-2">
+                    {WORKFLOW_STAGES[activeStage].items.map((item) => (
+                      <div
+                        key={item}
+                        className="flex items-center gap-2.5 rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-xs text-ink"
+                      >
+                        <Check className="h-3.5 w-3.5 text-ink shrink-0" />
+                        <span>{item}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
 
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={WORKFLOW_STAGES[activeStage].id}
-                    initial={reduced ? false : { opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={reduced ? undefined : { opacity: 0, y: -10 }}
-                    transition={{ duration: 0.28, ease: MOTION_EASE }}
-                    className="py-8 space-y-6"
-                  >
-                    <div>
-                      <p className="text-base font-medium text-ink-secondary">
-                        {WORKFLOW_STAGES[activeStage].subtitle}
-                      </p>
-                      <h4 className="font-display text-3xl sm:text-4xl font-medium text-ink leading-tight mt-2">
-                        {WORKFLOW_STAGES[activeStage].headline}
-                      </h4>
-                    </div>
-
-                    <StageVisualPreview stageId={WORKFLOW_STAGES[activeStage].id} />
-
-                    <div className="space-y-3">
-                      {WORKFLOW_STAGES[activeStage].items.map((item) => (
-                        <div
-                          key={item}
-                          className="flex items-center gap-3.5 rounded-xl border border-border bg-canvas px-4 py-3 text-sm text-ink"
-                        >
-                          <Check className="h-4 w-4 text-ink shrink-0" />
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-
-                <div className="pt-5 border-t border-border flex items-center justify-between text-sm text-ink-muted">
-                  <span>Real-time API &amp; database pipeline</span>
-                  <Link
-                    to={isAuthenticated ? '/interview/setup' : '/auth?mode=register'}
-                    className="inline-flex items-center gap-1.5 font-medium text-ink hover:underline"
-                  >
-                    Launch this stage <ArrowUpRight className="h-4 w-4" />
-                  </Link>
+                <div className="lg:col-span-6">
+                  <StageVisualPreview stageId={WORKFLOW_STAGES[activeStage].id} />
                 </div>
-              </div>
-            </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
       </section>
 
-      {/* Varied Editorial Features & Interactive Orb Studio Showcase */}
-      <section id="features" className="py-24 lg:py-32 border-b border-border">
-        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 space-y-24">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center rounded-2xl bg-[#090909] text-[#F5F5F4] p-8 sm:p-12 lg:p-16 border border-[#242424] studio-spotlight">
-            <div className="lg:col-span-6 space-y-6">
+      {/* Features & Interactive Studio Showcase */}
+      <section id="features" className="py-14 lg:py-18 border-b border-border">
+        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 space-y-12">
+          {/* Main Dark Studio Showcase Card */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center rounded-2xl bg-[#090909] text-[#F5F5F4] p-6 sm:p-10 border border-[#242424] studio-spotlight">
+            <div className="lg:col-span-6 space-y-4">
               <span className="font-mono text-xs uppercase tracking-wider text-[#A3A3A0]">
-                01 / SIGNATURE INTERVIEW STUDIO
+                01 / INTERACTIVE STUDIO DEMO
               </span>
-              <h2 className="font-display text-3xl sm:text-5xl font-medium leading-tight">
-                An attentive AI presence tuned to real speech, never canned loops.
+              <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-medium leading-tight">
+                An attentive AI presence tuned to real conversation.
               </h2>
-              <p className="text-base text-[#A3A3A0] leading-relaxed max-w-xl">
-                Preview how the harmonic particle field transitions cleanly across calm listening, active speaking, synthesis, and evaluation completion.
+              <p className="text-sm text-[#A3A3A0] leading-relaxed max-w-xl">
+                Experience a natural interview flow that listens, evaluates your problem-solving process, and provides thoughtful questions tailored to your experience.
               </p>
-              <div className="flex flex-wrap gap-2.5 pt-2">
-                {(['idle', 'listening', 'speaking', 'thinking', 'processing', 'disconnected'] as OrbState[]).map(
+              <div className="flex flex-wrap gap-2 pt-1">
+                {(['idle', 'listening', 'speaking', 'thinking', 'processing'] as OrbState[]).map(
                   (st) => (
                     <button
                       key={st}
                       type="button"
                       onClick={() => setDemoOrbState(st)}
-                      className={`px-4 py-2 rounded-xl text-xs font-mono border capitalize transition-colors ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono border capitalize transition-colors ${
                         demoOrbState === st
                           ? 'bg-[#C9F45B] text-[#111111] border-[#C9F45B] font-medium'
                           : 'bg-[#141414] text-[#A3A3A0] border-[#262626] hover:text-[#F5F5F4]'
@@ -694,60 +628,49 @@ export default function LandingPage() {
               <StudioAIOrb
                 state={demoOrbState}
                 audioLevel={demoOrbState === 'listening' ? 0.52 : 0}
-                size={310}
+                size={250}
               />
-              <span className="mt-3 font-mono text-xs uppercase tracking-widest text-[#A3A3A0]">
-                ORB TELEMETRY · {demoOrbState}
+              <span className="mt-2 font-mono text-xs uppercase tracking-widest text-[#A3A3A0]">
+                AI ASSISTANT · {demoOrbState}
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start pt-8 border-t border-border">
-            <div className="lg:col-span-4">
-              <div className="font-display text-6xl font-medium text-ink-muted/35">02</div>
-              <h3 className="font-display text-3xl font-medium mt-3">
-                Deterministic 4-Pillar Rubric
-              </h3>
-            </div>
-            <div className="lg:col-span-8 space-y-8">
-              <p className="text-lg text-ink-secondary leading-relaxed max-w-2xl">
-                Every interview ends with transparent, reproducible math — never opaque black-box verdicts. Candidates without cameras are evaluated fairly on response depth and fluency without penalty.
+          {/* Grid of 2 Clear Value Pillars */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-6 rounded-2xl border border-border bg-surface space-y-3 shadow-xs">
+              <div className="h-10 w-10 rounded-xl bg-surface-2 border border-border flex items-center justify-center text-ink">
+                <Zap className="h-5 w-5" />
+              </div>
+              <h3 className="font-display text-xl font-medium text-ink">Actionable Evaluation &amp; Insights</h3>
+              <p className="text-sm text-ink-secondary leading-relaxed">
+                Every interview delivers constructive, clear feedback on how you structured your thoughts, articulated technical solutions, and presented your background.
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                {[
-                  { label: 'Technical', weight: '30%' },
-                  { label: 'Communication', weight: '30%' },
-                  { label: 'Confidence', weight: '25%' },
-                  { label: 'Professionalism', weight: '15%' },
-                ].map((p) => (
-                  <div key={p.label} className="border-t-2 border-ink/15 pt-4">
-                    <div className="font-mono text-3xl font-medium text-ink">{p.weight}</div>
-                    <div className="text-sm text-ink-secondary mt-1.5">{p.label}</div>
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                {['Technical Accuracy', 'Communication Clarity', 'Confidence & Poise', 'Role Alignment'].map((p) => (
+                  <div key={p} className="flex items-center gap-2 text-xs text-ink font-medium">
+                    <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>{p}</span>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start pt-10 border-t border-border">
-            <div className="lg:col-span-4">
-              <div className="font-display text-6xl font-medium text-ink-muted/35">03</div>
-              <h3 className="font-display text-3xl font-medium mt-3">
-                Privacy-Isolated Talent Pipeline
-              </h3>
-            </div>
-            <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-10">
-              <div className="space-y-2.5">
-                <h4 className="text-base font-medium text-ink">Candidate Data Sovereignty</h4>
-                <p className="text-sm sm:text-base text-ink-secondary leading-relaxed">
-                  Practice interviews remain strictly private unless you explicitly opt in to share them. Export your complete JSON archive or deactivate anytime.
-                </p>
+            <div className="p-6 rounded-2xl border border-border bg-surface space-y-3 shadow-xs">
+              <div className="h-10 w-10 rounded-xl bg-surface-2 border border-border flex items-center justify-center text-ink">
+                <ShieldCheck className="h-5 w-5" />
               </div>
-              <div className="space-y-2.5">
-                <h4 className="text-base font-medium text-ink">Recruiter &amp; Admin Governance</h4>
-                <p className="text-sm sm:text-base text-ink-secondary leading-relaxed">
-                  Side-by-side structured comparisons, HMAC-verified PDF dossiers, reusable interview templates, sanitized CSV exports, and live security audit trails.
-                </p>
+              <h3 className="font-display text-xl font-medium text-ink">Privacy-First Candidate Experience</h3>
+              <p className="text-sm text-ink-secondary leading-relaxed">
+                Your mock interviews are completely confidential and private to your account. Practice in a safe, camera-optional environment designed purely for self-improvement.
+              </p>
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                {['Camera-Optional', 'Private Data Sovereignty', 'No Public Leakage', 'Exportable History'].map((p) => (
+                  <div key={p} className="flex items-center gap-2 text-xs text-ink font-medium">
+                    <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>{p}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -755,27 +678,27 @@ export default function LandingPage() {
       </section>
 
       {/* Editorial Footer */}
-      <footer className="py-20">
-        <div className="mx-auto max-w-[1440px] px-6 lg:px-10">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-10 pb-16 border-b border-border">
+      <footer className="py-12 border-t border-border">
+        <div className="mx-auto max-w-[1440px] px-6 lg:px-10 space-y-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
-              <span className="font-mono text-xs uppercase tracking-wider text-ink-muted">
-                READY WHEN YOU ARE
-              </span>
-              <h2 className="font-display text-4xl sm:text-6xl font-medium tracking-tight mt-3 max-w-2xl">
-                Turn preparation into calm execution.
+              <h2 className="font-display text-2xl sm:text-3xl font-medium text-ink">
+                Ready to elevate your interview readiness?
               </h2>
+              <p className="text-sm text-ink-secondary mt-1">
+                Join thousands practicing deliberate technical and behavioral interviews.
+              </p>
             </div>
             <Link to={isAuthenticated ? '/dashboard' : '/auth?mode=register'}>
               <Button variant="accent" size="lg">
-                Start your journey <ArrowRight className="h-4 w-4" />
+                Get started free <ArrowRight className="h-4 w-4 ml-1.5" />
               </Button>
             </Link>
           </div>
 
-          <div className="pt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-sm text-ink-muted">
+          <div className="pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-muted">
             <BrandMark size="sm" />
-            <div className="flex flex-wrap items-center gap-6">
+            <div className="flex flex-wrap items-center gap-5">
               <Link to="/auth" className="hover:text-ink transition-colors">
                 Sign in
               </Link>
@@ -785,7 +708,7 @@ export default function LandingPage() {
               <a href="/api/docs/" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
                 API Docs
               </a>
-              <span>© {new Date().getFullYear()} smarthire.</span>
+              <span>© {new Date().getFullYear()} smarthire. All rights reserved.</span>
             </div>
           </div>
         </div>
